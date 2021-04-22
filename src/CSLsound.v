@@ -1,4 +1,7 @@
-Require Import HahnBase ZArith List Basic Lang.
+From Coq Require Import ssreflect ssrbool ssrfun.
+From mathcomp Require Import ssrnat ssrint ssralg eqtype seq path.
+From cslsound Require Import (*HahnBase ZArith List*) Basic Lang.
+
 Set Implicit Arguments.
 Unset Strict Implicit.
 
@@ -9,7 +12,7 @@ Unset Strict Implicit.
   We represent separation logic assertions as the Coq [assn] (i.e., a
   deep embedding). Here is the syntax of assertions: *)
 
-Inductive assn : Set := 
+Inductive assn : Set :=
     Aemp
   | Apure (b: bexp)
   | Aconj (p1: assn) (p2: assn)
@@ -23,7 +26,7 @@ Inductive assn : Set :=
 (** Separating conjunction of a finite list of assertions is just a
   derived assertion. *)
 
-Fixpoint Aistar ps := 
+Fixpoint Aistar ps :=
   match ps with
     | nil => Aemp
     | p :: ps => Astar p (Aistar ps)
@@ -32,18 +35,18 @@ Fixpoint Aistar ps :=
 (** The semantics of assertions is given by the following function
   indicating whether a state [ss] satisfies an assertion [p]. *)
 
-Fixpoint sat ss p := 
+Fixpoint sat ss p :=
   match p with
-    | Aemp            => snd ss = (fun x => None) 
-    | Apure b         => bdenot b (fst ss)
+    | Aemp            => ss.2 = (fun x => None)
+    | Apure b         => bdenot b ss.1
     | Aconj p q       => sat ss p /\ sat ss q
     | Adisj p q       => sat ss p \/ sat ss q
-    | Astar p q       => exists h1 h2, sat (fst ss, h1) p /\ sat (fst ss, h2) q 
-                          /\ hdef h1 h2 /\ hplus h1 h2 = snd ss
-    | Awand p q       => forall h (SAT: sat (fst ss, h) p) (HD: hdef (snd ss) h),
-                          sat (fst ss, hplus (snd ss) h) q
-    | Apointsto e1 e2 => snd ss = upd (fun x => None) (edenot e1 (fst ss)) 
-                                                (Some (edenot e2 (fst ss)))
+    | Astar p q       => exists h1 h2, sat (ss.1, h1) p /\ sat (ss.1, h2) q
+                          /\ hdef h1 h2 /\ hplus h1 h2 = ss.2
+    | Awand p q       => forall h (SAT: sat (ss.1, h) p) (HD: hdef ss.2 h),
+                          sat (ss.1, hplus ss.2 h) q
+    | Apointsto e1 e2 => ss.2 = upd (fun x => None) (edenot e1 ss.1)
+                                                (Some (edenot e2 ss.1))
     | Anot p          => not (sat ss p)
     | Aex pp          => exists v, sat ss (pp v)
   end.
@@ -52,35 +55,44 @@ Fixpoint sat ss p :=
   separating conjunction. *)
 
 Lemma sat_istar_map_expand :
-  forall r l ss f (IN: In r l) (DL: disjoint_list l),
+  forall r l ss (f : int -> assn) (IN: r \in l) (DL: uniq l),
     sat ss (Aistar (map f l))
-    <-> exists h1 h2, sat (fst ss, h1) (f r)
-      /\ sat (fst ss, h2) (Aistar (map f (removeAll Z.eq_dec l r)))
-      /\ hdef h1 h2 /\ hplus h1 h2 = snd ss.
+    <-> exists h1 h2, sat (ss.1, h1) (f r)
+      /\ sat (ss.1, h2) (Aistar (map f (filter (predC1 r) l)))
+      /\ hdef h1 h2 /\ hplus h1 h2 = ss.2.
 Proof.
+move=>r l [s h] f.
+elim: l=>//= a l H H1 H2; split.
+- move=>[h1 [h2 [H0 [H01 [H02 H03]]]]].
+  move: H1; rewrite in_cons=>/orP; case.
+  - move/eqP=>->; rewrite eq_refl=>/=; exists h1, h2.
+    do!split=>//.
+
+
+
   destruct ss as [s h]; ins.
   revert h; induction l; ins; des; clarify.
     by destruct Z.eq_dec; clarify; rewrite removeAll_notin.
   destruct Z.eq_dec; simpls; clarify.
   split; intros; des; clarify; eauto.
     eapply IHl in H0; eauto; desf; rewrite hdef_hplus2 in *; desf.
-    by do 3 eexists; eauto; repeat eexists; eauto; 
+    by do 3 eexists; eauto; repeat eexists; eauto;
        (* try apply hdef_hplus; *) auto using hplusAC.
   rewrite hdef_hplus2 in *; desf.
   do 3 eexists; eauto; repeat eexists.
     by eapply IHl; eauto; repeat eexists; eauto.
-  eapply hdef_hplus2; eauto. 
+  eapply hdef_hplus2; eauto.
   eauto using hplusAC.
-Qed. 
+Qed.
 
-(** ** Precision 
+(** ** Precision
 
   We say that a assertion is precise if for any given heap, there is
   at most one subheap that satisfies the formula. (The formal
   definition below says that if there are two such subheaps, they must
   be equal.) *)
 
-Definition precise p := 
+Definition precise p :=
   forall h1 h2 h1' h2' s
     (SAT: sat (s, h1) p)
     (SAT': sat (s, h1') p)
@@ -94,7 +106,7 @@ Ltac inss := ins; desf; unnw; intuition; desf.
 (** The empty assertion, emp, is precise. *)
 
 Lemma precise_emp: precise Aemp.
-Proof. by red; ins; extensionality x; rewrite SAT, SAT'. Qed. 
+Proof. by red; ins; extensionality x; rewrite SAT, SAT'. Qed.
 
 (** Star conjunction of precise assertions is precise. *)
 
@@ -102,9 +114,9 @@ Lemma precise_star p q: precise p -> precise q -> precise (Astar p q).
 Proof.
   unfold precise; ins; desf.
   rewrite ?hdef_hplus, ?hplusA in *; des.
-  assert (h4 = h0) by eauto. 
+  assert (h4 = h0) by eauto.
   clarify; f_equal; rewrite (hplusAC h2), (hplusAC h2') in EQ; eauto.
-Qed. 
+Qed.
 
 Lemma precise_istar:
   forall l (P: forall x (IN: In x l), precise x), precise (Aistar l).
@@ -114,20 +126,20 @@ Proof. by induction l; ins; auto using precise_emp, precise_star. Qed.
 
 Definition assn_lift po := match po with None => Aemp | Some p => p end.
 
-Definition envs G (l l' : list rname) := 
+Definition envs G (l l' : list rname) :=
   (Aistar (map (fun x => assn_lift (G x)) (list_minus Z.eq_dec l l'))).
 
 Lemma sat_envs_expand:
   forall r l l' (IN: In r l) (NIN: ~ In r l')
     (LD: disjoint_list l) J ss,
-    sat ss (envs J l l') 
-    <-> exists h1 h2, sat (fst ss, h1) (assn_lift (J r)) 
+    sat ss (envs J l l')
+    <-> exists h1 h2, sat (fst ss, h1) (assn_lift (J r))
               /\ sat (fst ss, h2) (envs J (removeAll Z.eq_dec l r) l')
               /\ snd ss = hplus h1 h2 /\ hdef h1 h2.
 Proof.
   unfold envs; ins.
-  rewrite (sat_istar_map_expand (r := r)), removeAll_list_minus; 
-    auto using disjoint_list_list_minus. 
+  rewrite (sat_istar_map_expand (r := r)), removeAll_list_minus;
+    auto using disjoint_list_list_minus.
     by intuition; simpls; desf; eauto 10.
   by apply In_list_minus.
 Qed.
@@ -144,29 +156,29 @@ Proof.
   by unfold envs; ins; rewrite list_minus_appl.
 Qed.
 
-Lemma envs_removeAll_irr: 
+Lemma envs_removeAll_irr:
   forall r l (NIN: ~ In r l) J l', envs J l (removeAll Z.eq_dec l' r) = envs J l l'.
 Proof.
   by unfold envs; ins; rewrite list_minus_removeAll_irr.
 Qed.
 
 Lemma envs_removeAll2:
-  forall r l' (IN: In r l') J l, 
+  forall r l' (IN: In r l') J l,
     envs J (removeAll Z.eq_dec l r) (removeAll Z.eq_dec l' r) = envs J l l'.
 Proof.
   unfold envs; ins; rewrite list_minus_removeAll2.
-  f_equal; f_equal; revert l; induction l'; ins; desf. 
+  f_equal; f_equal; revert l; induction l'; ins; desf.
     by rewrite removeAll_list_minus, removeAllK.
-  by rewrite IHl'. 
+  by rewrite IHl'.
 Qed.
 
-Lemma envs_cons2_irr: 
+Lemma envs_cons2_irr:
   forall r l (NIN: ~ In r l) J l', envs J (r :: l) (r :: l') = envs J l l'.
 Proof.
   by unfold envs; ins; desf; rewrite removeAll_irr.
 Qed.
 
-Lemma envs_upd_irr : forall J r v l l', 
+Lemma envs_upd_irr : forall J r v l l',
   ~ In r l \/ In r l' -> envs (upd J r v) l l' = envs J l l'.
 Proof.
   unfold envs; ins; f_equal; apply Eq_in_map; unfold upd; ins; desf;
@@ -176,13 +188,13 @@ Qed.
 (** ** Meaning of CSL judgments *)
 
 (** First, we define configuration safety (cf. Definitions 3 and 4 in paper).
-Intuitively, any configuration is safe for zero steps. For n + 1 steps, it better 
-(i) satisfy the postcondition if it is a terminal configuration, (ii) not abort, 
-(iii) access memory only inside its footprint, and 
-(iv) after any step it does, re-establish the resource invariant and be safe for 
+Intuitively, any configuration is safe for zero steps. For n + 1 steps, it better
+(i) satisfy the postcondition if it is a terminal configuration, (ii) not abort,
+(iii) access memory only inside its footprint, and
+(iv) after any step it does, re-establish the resource invariant and be safe for
 another n steps.  *)
 
-Fixpoint safe (n : nat) (c: cmd) (s: stack) (h: heap) (gamma : rname -> option assn) (q: assn) := 
+Fixpoint safe (n : nat) (c: cmd) (s: stack) (h: heap) (gamma : rname -> option assn) (q: assn) :=
   match n with O => True
     | S n =>
 (* Condition (i) *)
@@ -199,7 +211,7 @@ Fixpoint safe (n : nat) (c: cmd) (s: stack) (h: heap) (gamma : rname -> option a
              (D2: hdef h hF)
              (D3: hdef hJ hF),
              exists h' hJ',
-                     snd ss' = hplus h' (hplus hJ' hF) 
+                     snd ss' = hplus h' (hplus hJ' hF)
                   /\ hdef h' hJ'
                   /\ hdef h' hF
                   /\ hdef hJ' hF
@@ -217,7 +229,7 @@ Definition CSL gamma p c q :=
 (** The free variables of an assertion [p] are given as a predicate
 [fvA p]. *)
 
-Fixpoint fvA p := 
+Fixpoint fvA p :=
   match p with
     | Aemp            => (fun v => False)
     | Apure B         => (fun v => In v (fvB B))
@@ -234,7 +246,7 @@ Definition fvAs gamma v := exists x : rname, fvA (assn_lift (gamma x)) v.
 
 (** Substitution of an expression for a free variable in an assertion: *)
 
-Fixpoint subA x e p := 
+Fixpoint subA x e p :=
   match p with
     | Aemp            => Aemp
     | Apure B         => Apure (subB x e B)
@@ -256,8 +268,8 @@ Qed.
 Lemma subA_assign:
   forall x e p s h, sat (s,h) (subA x e p) <-> sat (upd s x (edenot e s), h) p.
 Proof.
-  induction p; ins; repeat first 
-    [done | apply ex_iff; intro|apply all_iff; intro 
+  induction p; ins; repeat first
+    [done | apply ex_iff; intro|apply all_iff; intro
       | rewrite subE_assign | rewrite subB_assign
       | match goal with H: _ |- _ => rewrite H; clear H end].
 Qed.
@@ -271,15 +283,15 @@ Qed.
 Lemma prop1_A: forall p s s' (A: forall v (FV: fvA p v), s v = s' v) h,
   sat (s, h) p <-> sat (s', h) p.
 Proof.
-  ins; revert h; induction p; ins; repeat first 
-    [done | apply ex_iff; intro|apply all_iff; intro 
-      | rewrite (prop1_B A) 
+  ins; revert h; induction p; ins; repeat first
+    [done | apply ex_iff; intro|apply all_iff; intro
+      | rewrite (prop1_B A)
       | match goal with H: _ |- _ => rewrite H; clear H end]; eauto.
   by rewrite (prop1_E (agrees_app1 A)), (prop1_E (agrees_app2 A)).
 Qed.
 
-Lemma prop1_As : 
-  forall J s s' (A: forall v (FV: fvAs J v), s v = s' v) h l1 l2, 
+Lemma prop1_As :
+  forall J s s' (A: forall v (FV: fvAs J v), s v = s' v) h l1 l2,
     sat (s, h) (envs J l1 l2) <-> sat (s', h) (envs J l1 l2).
 Proof.
   unfold envs; ins; apply prop1_A; ins.
@@ -288,22 +300,22 @@ Proof.
 Qed.
 
 Corollary prop1_AsE :
-  forall s h J l1 l2 s' 
-    (SAT: sat (s, h) (envs J l1 l2)) 
+  forall s h J l1 l2 s'
+    (SAT: sat (s, h) (envs J l1 l2))
     (A: forall v (FV: fvAs J v), s v = s' v),
   sat (s',h) (envs J l1 l2).
 Proof.
   intros; eapply prop1_As, SAT; symmetry; eauto.
-Qed. 
+Qed.
 
-Corollary prop1_A2 : 
+Corollary prop1_A2 :
   forall x P (NIN: ~ fvA P x) s v h, sat (upd s x v, h) P <-> sat (s, h) P.
-Proof. ins; apply prop1_A; unfold upd; ins; desf. Qed. 
+Proof. ins; apply prop1_A; unfold upd; ins; desf. Qed.
 
 Corollary prop1_As2 :
-  forall x J (NIN: ~ fvAs J x) s v h l l', 
+  forall x J (NIN: ~ fvAs J x) s v h l l',
   sat (upd s x v, h) (envs J l l') <-> sat (s, h) (envs J l l').
-Proof. ins; apply prop1_As; unfold upd; ins; desf. Qed. 
+Proof. ins; apply prop1_As; unfold upd; ins; desf. Qed.
 
 (** 2. Safety is monotone with respect to the step number (Proposition 3 in paper). *)
 
@@ -313,25 +325,25 @@ Lemma safe_mon :
 Proof.
   intros until m; revert C s n h OK; induction m; ins; unnw.
   destruct n; [exfalso; omega|apply le_S_n in LEQ].
-  clarify; simpls; des; repeat split; ins. 
-  exploit SOK; eauto; ins; des; eauto 10. 
-Qed. 
+  clarify; simpls; des; repeat split; ins.
+  exploit SOK; eauto; ins; des; eauto 10.
+Qed.
 
 (** 3. Safety depends only on the values of the free variables of the program, the
 postcondition and the resource invariants (Proposition 4 in the paper). To establish
 this property, we need the following auxiliary lemmas.
 *)
 
-Lemma agrees_upd : 
+Lemma agrees_upd :
   forall A s s' y (EQs: s y = s' y) x x' (EQx: x = x') v v' (EQv: v = v'),
     upd (A:=A) s x v' y = upd s' x' v' y.
 Proof. unfold upd; ins; desf. Qed.
 
-Lemma red_agrees : 
-  forall c ss c' ss' (STEP: red c ss c' ss') 
-    X s (A: forall x, X x -> fst ss x = s x) 
-        (S_FV: forall x, In x (fvC c) -> X x), 
-    exists s' h', red c (s, snd ss) c' (s', h') 
+Lemma red_agrees :
+  forall c ss c' ss' (STEP: red c ss c' ss')
+    X s (A: forall x, X x -> fst ss x = s x)
+        (S_FV: forall x, In x (fvC c) -> X x),
+    exists s' h', red c (s, snd ss) c' (s', h')
       /\ (forall x, X x -> fst ss' x = s' x) /\ snd ss' = h'.
 Proof.
   induction 1; ins; clarify; simpls; eauto using red;
@@ -342,24 +354,24 @@ Proof.
   - do 3 eexists; [|split]; eauto using red.
     intros; rewrite (prop1_E (s' := s0)); try red; eauto.
     unfold upd; desf; auto.
-  
+
   - rewrite (prop1_E (s' := s0)) in RD; try red; eauto.
     eauto 12 using red, prop1_E, agrees_upd.
-  
+
   - do 3 eexists; [|split]; eauto using red.
     f_equal; [|f_equal]; eapply prop1_E; red; eauto using in_or_app.
-  
+
   - do 3 eexists; [|split];
       eauto using red, agrees_upd, prop1_E.
-    f_equal; f_equal; eapply prop1_E; red; eauto. 
+    f_equal; f_equal; eapply prop1_E; red; eauto.
 
   - do 3 eexists; [|split];
       eauto using red, prop1_E.
     f_equal; eapply prop1_E; red; eauto.
 Qed.
 
-Lemma aborts_agrees : 
-  forall c ss (ABORT: aborts c ss) 
+Lemma aborts_agrees :
+  forall c ss (ABORT: aborts c ss)
     s' (A: agrees (fvC c) (fst ss) s') h' (EQ: snd ss = h'),
     aborts c (s', h').
 Proof.
@@ -371,7 +383,7 @@ Qed.
 
 (** With these lemmas, we can show Proposition 4. *)
 
-Lemma safe_agrees : 
+Lemma safe_agrees :
   forall n C s h J Q (OK: safe n C s h J Q) s'
     (A: forall v, In v (fvC C) \/ fvA Q v \/ fvAs J v -> s v = s' v),
     safe n C s' h J Q.
@@ -381,10 +393,10 @@ Proof.
   by eapply NAB, aborts_agrees; eauto; red; symmetry; eauto.
   by eapply AOK; eauto; erewrite accesses_agrees; unfold agrees; eauto.
 
-  exploit prop2; eauto; intro M; des; simpls; clarify. 
+  exploit prop2; eauto; intro M; des; simpls; clarify.
   exploit red_agrees; try apply STEP; [symmetry; eapply A, X|by left|].
-  clear STEP; intros (s'0 & _ & STEP & A' & <-). 
-  exploit SOK; eauto; [by eapply prop1_As, SAT; ins; eauto| ins; des]. 
+  clear STEP; intros (s'0 & _ & STEP & A' & <-).
+  exploit SOK; eauto; [by eapply prop1_As, SAT; ins; eauto| ins; des].
   clarify; repeat eexists; eauto.
   by eapply prop1_As; try eassumption; eauto.
   eapply IHn; eauto; symmetry; eapply A'; des; auto.
@@ -403,9 +415,9 @@ Definition pred_of_list A (l: list A) (x: A) := In x l.
 
 Coercion pred_of_list : list >-> Funclass.
 
-Lemma disjoint_conv : 
+Lemma disjoint_conv :
   forall A (l1 l2 : list A), disjoint l1 l2 -> Basic.disjoint l1 l2.
-Proof.  
+Proof.
   done.
 Qed.
 
@@ -428,17 +440,17 @@ Lemma safe_par:
    C2 h2 Q2 (OK2: safe n C2 s h2 J Q2)
    (WF: wf_cmd (Cpar C1 C2))
    (HD: hdef h1 h2)
-   (FV1: disjoint (fvC C1) (wrC C2)) 
-   (FV2: disjoint (fvA Q1) (wrC C2)) 
+   (FV1: disjoint (fvC C1) (wrC C2))
+   (FV2: disjoint (fvA Q1) (wrC C2))
    (FV3: disjoint (fvAs J) (wrC C2))
-   (FV4: disjoint (fvC C2) (wrC C1)) 
+   (FV4: disjoint (fvC C2) (wrC C1))
    (FV5: disjoint (fvA Q2) (wrC C1))
    (FV6: disjoint (fvAs J) (wrC C1)),
   safe n (Cpar C1 C2) s (hplus h1 h2) J (Astar Q1 Q2).
 Proof.
   induction n; inss.
   {  (* No aborts *)
-   
+
     rewrite hdef_hplus, hplusA in *; des; inv ABORT; eauto.
     by rewrite hplusAC in A; [eapply NAB, A|]; eauto.
     (* No races *)
@@ -458,7 +470,7 @@ Proof.
     rewrite (hplusAC hF) in R; auto.
     exploit SOK0; eauto; intro M; des.
     rewrite hdef_hplus2 in *; des.
-    exists (hplus h' h2), hJ'; repeat eexists; eauto. 
+    exists (hplus h' h2), hJ'; repeat eexists; eauto.
       by rewrite M, hplusA; f_equal; rewrite hplusAC; auto.
     destruct (prop2 R) as (B1 & B2 & B3).
     eapply IHn; repeat split; eauto using red_wf_cmd;
@@ -471,14 +483,14 @@ Proof.
     rewrite (hplusAC hF) in R; auto.
     exploit SOK; eauto; intro M; des.
     rewrite hdef_hplus2 in *; des.
-    exists (hplus h1 h'), hJ'; repeat eexists; eauto. 
+    exists (hplus h1 h'), hJ'; repeat eexists; eauto.
       rewrite (@hplusC h' h1); auto.
       by rewrite M, hplusA; f_equal; rewrite hplusAC; auto.
     destruct (prop2 R) as (B1 & B2 & B3).
     eapply IHn; repeat split; eauto using red_wf_cmd;
       try (by unfold disjoint, pred_of_list in *; ins; eauto 3).
-    apply safe_agrees with s; [by eapply safe_mon, le_n_Sn|]. 
-    by symmetry; apply B3; unfold disjoint in *; des; eauto. 
+    apply safe_agrees with s; [by eapply safe_mon, le_n_Sn|].
+    by symmetry; apply B3; unfold disjoint in *; des; eauto.
   - (* Par skip skip *)
     exists (hplus h1 h2), hJ; rewrite hplusA; repeat split; eauto.
     eapply safe_skip; repeat eexists; eauto.
@@ -490,7 +502,7 @@ Theorem rule_par J P1 P2 C1 C2 Q1 Q2 :
   disjoint (fvC C1) (wrC C2) -> disjoint (fvA Q1) (wrC C2) -> disjoint (fvAs J) (wrC C2) ->
   disjoint (fvC C2) (wrC C1) -> disjoint (fvA Q2) (wrC C1) -> disjoint (fvAs J) (wrC C1) ->
   CSL J (Astar P1 P2) (Cpar C1 C2) (Astar Q1 Q2).
-Proof. 
+Proof.
   unfold CSL; inss; eapply safe_par; simpl; auto.
   rewrite !user_cmd_locked; simpls; auto.
 Qed.
@@ -505,7 +517,7 @@ Lemma safe_resource:
        safe n (Cresource r C) s (hplus h hR) J (Astar Q R))
    /\ (In r (locked C) -> safe n (Cresource r C) s h J (Astar Q R)).
 Proof.
-  induction n; inss; 
+  induction n; inss;
     try rewrite hdef_hplus in *; desf;
     try (by inv ABORT; desf; try rewrite hplusA in A; eauto);
     try (inv STEP).
@@ -513,7 +525,7 @@ Proof.
   by unfold hplus in *; desf; eauto.
 
   { (* normal step *)
-  rewrite removeAll_irr in *; simpls. 
+  rewrite removeAll_irr in *; simpls.
   rewrite hplusA in *.
   assert (B := prop2 R0); desf.
   destruct (In_dec Z.eq_dec r (locked c'0)).
@@ -528,19 +540,19 @@ Proof.
     ins; desf.
     exploit IHn; eauto using red_wf_cmd; ins; desf.
       by unfold disjoint, pred_of_list in *; ins; eauto.
-    rewrite envs_upd_irr in *; vauto. 
+    rewrite envs_upd_irr in *; vauto.
     by repeat eexists; eauto; rewrite envs_removeAll_irr; auto.
 
-  - rewrite (hplusAC hF) in R0; auto.      
-    rewrite removeAll_irr in *; simpls. 
+  - rewrite (hplusAC hF) in R0; auto.
+    rewrite removeAll_irr in *; simpls.
     exploit SOK; eauto; [by rewrite envs_upd_irr; vauto |intro M; desf].
     exploit IHn; eauto using red_wf_cmd; ins; desf.
       by unfold disjoint, pred_of_list in *; ins; eauto.
-    rewrite envs_upd_irr in *; vauto. 
+    rewrite envs_upd_irr in *; vauto.
     rewrite hdef_hplus2 in *; desf.
     rewrite (hplusAC hF), <- (hplusA h') in M; auto.
     rewrite (prop1_A (s':=fst ss')) in SAT_R.
-    repeat eexists; eauto. 
+    repeat eexists; eauto.
     by symmetry; apply B2; unfold disjoint in *; des; eauto.
   }
   { (* exit *)
@@ -553,15 +565,15 @@ Proof.
     forward eapply IHn as Y; eauto using red_wf_cmd.
       by unfold disjoint, pred_of_list in *; ins; eauto.
     ins; desf.
-    
+
     destruct (In_dec Z.eq_dec r (locked c'0)).
       rewrite envs_upd_irr in *; auto.
       rewrite envs_removeAll2; auto.
       by repeat eexists; eauto.
-    
+
     rewrite envs_removeAll_irr; try rewrite In_removeAll; intuition.
     rewrite sat_envs_expand in X3; try edone; ins; desf.
-    rewrite envs_upd_irr in *; try rewrite In_removeAll; intuition. 
+    rewrite envs_upd_irr in *; try rewrite In_removeAll; intuition.
     unfold upd in X3; desf; simpls.
     rewrite hdef_hplus, hdef_hplus2 in *; desf.
     rewrite !hplusA in *.
@@ -584,7 +596,7 @@ Qed.
 (** *** Frame rule *)
 
 Lemma safe_frame:
- forall n C s h J Q 
+ forall n C s h J Q
    (OK: safe n C s h J Q) hR
    (HD: hdef h hR) R
    (DISJ: disjoint (fvA R) (wrC C))
@@ -615,12 +627,12 @@ Qed.
 (** *** Conditional critical regions *)
 
 Lemma safe_inwith:
-  forall n C s h J Q r 
+  forall n C s h J Q r
     (OK : safe n C s h J (Astar Q (assn_lift (J r))))
     (WF: wf_cmd (Cinwith r C)),
   safe n (Cinwith r C) s h J Q.
 Proof.
-  induction n; inss; 
+  induction n; inss;
     [by inv ABORT; eauto|inv STEP; ins].
   - exploit SOK; try eapply R; eauto.
       by rewrite envs_cons2_irr in SAT.
@@ -640,8 +652,8 @@ Proof.
   inv STEP; ins; desf; rewrite (user_cmd_locked U) in *; simpls.
   rewrite hdef_hplus, hdef_hplus2 in *; desf.
   exists (hplus h h1), (fun _ => None); rewrite !hplusA; repeat split; auto.
-  eapply safe_inwith; simpl; eauto 10. 
-  rewrite (user_cmd_locked); auto. 
+  eapply safe_inwith; simpl; eauto 10.
+  rewrite (user_cmd_locked); auto.
 Qed.
 
 (** *** Sequential composition *)
@@ -685,7 +697,7 @@ Lemma safe_while:
     safe n (Cwhile B C) s h J (Aconj P (Apure (Bnot B))).
 Proof.
   intros; revert s h SAT_P; generalize (le_refl n); generalize n at -2 as m.
-  induction n; destruct m; ins; [inv H|apply le_S_n in H]. 
+  induction n; destruct m; ins; [inv H|apply le_S_n in H].
   unnw; intuition; desf; [by inv ABORT|].
   inv STEP; repeat eexists; eauto; simpl.
   destruct m; ins; desf; unnw; intuition; desf; [by inv ABORT|].
@@ -714,8 +726,8 @@ Proof.
 Qed.
 
 Theorem rule_read J x E E' :
-  ~ In x (fvE E) -> 
-  ~ In x (fvE E') -> 
+  ~ In x (fvE E) ->
+  ~ In x (fvE E') ->
   ~ fvAs J x ->
   CSL J (Apointsto E E') (Cread x E) (Aconj (Apointsto E E') (Apure (Beq (Evar x) E'))).
 Proof.
@@ -723,19 +735,19 @@ Proof.
     by inv ABORT; ins; unfold hplus, upd in *; desf.
     by unfold upd in *; desf.
   inv STEP.
-  repeat eexists; eauto; eapply safe_skip; ins. 
+  repeat eexists; eauto; eapply safe_skip; ins.
   rewrite !prop1_E2; try done.
   clear STEP; unfold hplus, upd in *; desf; rewrite H2 in *; desf.
 Qed.
 
-Lemma hdef_upd : 
+Lemma hdef_upd :
   forall h h' x v, h x <> None -> hdef h h' ->
   hdef (upd h x v) h'.
 Proof.
   unfold hdef, upd; ins; desf; firstorder.
 Qed.
 
-Lemma hdef_upds : 
+Lemma hdef_upds :
   forall h h' x v v', hdef (upd h x (Some v)) h' ->
   hdef (upd h x (Some v')) h'.
 Proof.
@@ -746,10 +758,10 @@ Qed.
 Theorem rule_write J E E0 E':
   CSL J (Apointsto E E0) (Cwrite E E') (Apointsto E E').
 Proof.
-  unfold CSL; inss; destruct n; inss. 
+  unfold CSL; inss; destruct n; inss.
     by inv ABORT; ins; unfold hplus, upd in *; desf.
     by unfold upd in *; desf.
-  inv STEP; clear STEP; ins; clarify. 
+  inv STEP; clear STEP; ins; clarify.
   eexists (upd (fun _ => None) (edenot E s0) (Some (edenot E' s0))), (fun _ => None).
   repeat split; eauto using hdefU, hdefU, hdef_upds.
     by extensionality x; unfold upd, hplus; simpl; desf.
@@ -757,7 +769,7 @@ Proof.
 Qed.
 
 Theorem rule_alloc J x E:
-  ~ In x (fvE E) -> 
+  ~ In x (fvE E) ->
   ~ fvAs J x ->
   CSL J (Aemp) (Calloc x E) (Apointsto (Evar x) E).
 Proof.
@@ -765,9 +777,9 @@ Proof.
   by inv ABORT.
   inv STEP; ins; clarify.
   eexists (upd (fun _ => None) v (Some (edenot E s0))), (fun _ => None).
-  rewrite ?hplusU in *; repeat split; auto using hdefU. 
+  rewrite ?hplusU in *; repeat split; auto using hdefU.
     by extensionality y; unfold upd, hplus; simpl; desf.
-  by unfold hdef, upd; ins; desf; vauto. 
+  by unfold hdef, upd; ins; desf; vauto.
   by apply safe_skip; ins; rewrite prop1_E2; unfold upd; desf.
 Qed.
 
@@ -792,21 +804,21 @@ Lemma safe_conseq:
   forall n C s h J Q (OK: safe n C s h J Q) Q' (IMP: Q |= Q'),
   safe n C s h J Q'.
 Proof.
-  induction n; inss. 
+  induction n; inss.
   exploit SOK; eauto; ins; desf; repeat eexists; eauto.
 Qed.
 
 Theorem rule_conseq J P C Q P' Q':
-  CSL J P C Q -> 
-  (P' |= P) -> 
-  (Q |= Q') -> 
+  CSL J P C Q ->
+  (P' |= P) ->
+  (Q |= Q') ->
   CSL J P' C Q'.
 Proof.
   unfold CSL; inss; eauto using safe_conseq.
 Qed.
 
 Theorem rule_disj J P1 P2 C Q1 Q2:
-  CSL J P1 C Q1 -> 
+  CSL J P1 C Q1 ->
   CSL J P2 C Q2 ->
   CSL J (Adisj P1 P2) C (Adisj Q1 Q2).
 Proof.
@@ -814,7 +826,7 @@ Proof.
 Qed.
 
 Theorem rule_ex J P C Q:
-  (forall x, CSL J (P x) C (Q x)) -> 
+  (forall x, CSL J (P x) C (Q x)) ->
   CSL J (Aex P) C (Aex Q).
 Proof.
   unfold CSL; inss; [by destruct (H 0)|].
@@ -831,17 +843,17 @@ Lemma safe_conj:
 Proof.
   induction n; inss.
   forward eapply SOK as X; eauto; forward eapply SOK0 as Y; eauto; ins; desf.
-  assert (P: precise (envs J (locked C) (locked c'))). 
-    by apply precise_istar; ins; eapply in_map_iff in IN; desf. 
-  assert (hJ' = hJ'0) 
-    by (rewrite hplusAC in *; rewrite X in *; auto; eapply P; eauto); subst. 
+  assert (P: precise (envs J (locked C) (locked c'))).
+    by apply precise_istar; ins; eapply in_map_iff in IN; desf.
+  assert (hJ' = hJ'0)
+    by (rewrite hplusAC in *; rewrite X in *; auto; eapply P; eauto); subst.
   assert (h' = h'0); subst; eauto 10.
   by rewrite X in *; eapply hplusKr; eauto.
 Qed.
 
 Theorem rule_conj J P1 P2 C Q1 Q2:
-  CSL J P1 C Q1 -> 
-  CSL J P2 C Q2 -> 
+  CSL J P1 C Q1 ->
+  CSL J P2 C Q2 ->
   (forall r, precise (assn_lift (J r))) ->
   CSL J (Aconj P1 P2) C (Aconj Q1 Q2).
 Proof.

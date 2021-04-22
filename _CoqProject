@@ -1,0 +1,7 @@
+-Q . cslsound
+-arg -w -arg -notation-overridden
+-arg -w -arg -redundant-canonical-projection
+
+src/Basic.v
+src/Lang.v
+src/CSLsound.v

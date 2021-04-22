@@ -1,7 +1,13 @@
-Require Import HahnBase ZArith List Basic.
+From Coq Require Import ssreflect ssrbool ssrfun.
+From mathcomp Require Import ssrnat ssrint ssralg eqtype seq path.
+From cslsound Require Import Basic.
+
+(*Require Import HahnBase ZArith List Basic.*)
 
 Set Implicit Arguments.
 Unset Strict Implicit.
+
+Open Scope ring_scope.
 
 (** This file contains a soundness proof for CSL (with multiple resources)
   as presented by O'Hearn and Brookes including the data-race freedom property
@@ -10,17 +16,17 @@ Unset Strict Implicit.
 
 (** * Language syntax and semantics *)
 
-(** We define the syntax and the operational semantics of the programming 
+(** We define the syntax and the operational semantics of the programming
 language of O'Hearn and Brookes. *)
 
-Definition var   := Z.
-Definition rname := Z.
-Definition stack := var -> Z.
+Definition var   := int.
+Definition rname := int.
+Definition stack := var -> int.
 Definition state := (stack * heap)%type.
 
-Inductive exp := 
+Inductive exp :=
   | Evar  (x : var)
-  | Enum  (n : Z)
+  | Enum  (n : int)
   | Eplus (e1: exp) (e2: exp).
 
 Inductive bexp :=
@@ -49,30 +55,30 @@ between arithmetic expressions.  Commands ([cmd]) include the empty command,
 variable assignments, memory reads, writes, allocations and deallocations,
 sequential and parallel composition, conditionals, while loops, resource
 declaration and conditional critical regions (CCRs).  The last command form
-represents a partially executed CCR and does not appear in user programs. 
+represents a partially executed CCR and does not appear in user programs.
 This restriction is captured by the following definition: *)
 
-Fixpoint user_cmd c := 
+Fixpoint user_cmd c :=
   match c with
-    | Cskip         => True
-    | Cassign x E   => True
-    | Cread x E     => True
-    | Cwrite E E'   => True
-    | Calloc x E    => True
-    | Cdispose E    => True
-    | Cseq C1 C2    => user_cmd C1 /\ user_cmd C2
-    | Cpar C1 C2    => user_cmd C1 /\ user_cmd C2
-    | Cif B C1 C2   => user_cmd C1 /\ user_cmd C2
+    | Cskip         => true
+    | Cassign x E   => true
+    | Cread x E     => true
+    | Cwrite E E'   => true
+    | Calloc x E    => true
+    | Cdispose E    => true
+    | Cseq C1 C2    => user_cmd C1 && user_cmd C2
+    | Cpar C1 C2    => user_cmd C1 && user_cmd C2
+    | Cif B C1 C2   => user_cmd C1 && user_cmd C2
     | Cwhile B C    => user_cmd C
     | Cresource r C => user_cmd C
     | Cwith r B C   => user_cmd C
-    | Cinwith r C   => False
+    | Cinwith r C   => false
   end.
 
 (** The following function returns a list of locks that a command is
 currently holding in some arbitrary fixed order. *)
 
-Fixpoint locked c := 
+Fixpoint locked c :=
   match c with
     | Cskip         => nil
     | Cassign x e   => nil
@@ -84,7 +90,7 @@ Fixpoint locked c :=
     | Cpar c1 c2    => locked c1 ++ locked c2
     | Cif b c1 c2   => nil
     | Cwhile b c    => nil
-    | Cresource r c => removeAll Z.eq_dec (locked c) r
+    | Cresource r c => filter (predC1 r) (locked c)
     | Cwith r b c   => nil
     | Cinwith r c   => r :: locked c
   end.
@@ -92,7 +98,7 @@ Fixpoint locked c :=
 (** The following function returns a list of locks that a command has
 access to (either has acquired or may acquire in the future). *)
 
-Fixpoint locks c := 
+Fixpoint locks c :=
   match c with
     | Cskip         => nil
     | Cassign x e   => nil
@@ -104,8 +110,8 @@ Fixpoint locks c :=
     | Cpar c1 c2    => locks c1 ++ locks c2
     | Cif b c1 c2   => locks c1 ++ locks c2
     | Cwhile b c    => locks c
-    | Cresource r c => removeAll Z.eq_dec (locks c) r
-    | Cwith r b c   => r :: locks c 
+    | Cresource r c => filter (predC1 r) (locks c)
+    | Cwith r b c   => r :: locks c
     | Cinwith r c   => r :: locks c
   end.
 
@@ -118,12 +124,12 @@ Fixpoint edenot e s :=
   match e with
     | Evar v      => s v
     | Enum n      => n
-    | Eplus e1 e2 => (edenot e1 s + edenot e2 s)%Z
+    | Eplus e1 e2 => edenot e1 s + edenot e2 s
   end.
 
-Fixpoint bdenot b s : bool := 
+Fixpoint bdenot b s : bool :=
   match b with
-    | Beq e1 e2  => if Z.eq_dec (edenot e1 s) (edenot e2 s) then true else false
+    | Beq e1 e2  => if edenot e1 s == edenot e2 s then true else false
     | Band b1 b2 => bdenot b1 s && bdenot b2 s
     | Bnot b     => negb (bdenot b s)
   end.
@@ -135,38 +141,38 @@ Fixpoint bdenot b s : bool :=
     for illustration purposes only.  Requiring that [h (edenot e s) <>
     None] does not change the proof. *)
 
-Inductive red: cmd -> state -> cmd -> state -> Prop := 
+Inductive red: cmd -> state -> cmd -> state -> Prop :=
 | red_Seq1: forall c ss, red (Cseq Cskip c) ss c ss
-| red_Seq2: forall c1 ss c1' ss' c2 
-  (R: red c1 ss c1' ss'), 
+| red_Seq2: forall c1 ss c1' ss' c2
+  (R: red c1 ss c1' ss'),
   red (Cseq c1 c2) ss (Cseq c1' c2) ss'
-| red_If1: forall b c1 c2 ss 
-  (B: bdenot b (fst ss) = true), 
+| red_If1: forall b c1 c2 ss
+  (B: bdenot b (fst ss) = true),
   red (Cif b c1 c2) ss c1 ss
 | red_If2: forall b c1 c2 ss
   (B: bdenot b (fst ss) = false),
   red (Cif b c1 c2) ss c2 ss
 | red_Par1: forall c1 c2 ss c1' ss'
-  (R: red c1 ss c1' ss') 
-  (D: disjoint (locked c1') (locked c2)), 
+  (R: red c1 ss c1' ss')
+  (D: disjoint (locked c1') (locked c2)),
   red (Cpar c1 c2) ss (Cpar c1' c2) ss'
 | red_Par2: forall c1 c2 ss c2' ss'
-  (R: red c2 ss c2' ss') 
-  (D: disjoint (locked c1) (locked c2')), 
+  (R: red c2 ss c2' ss')
+  (D: disjoint (locked c1) (locked c2')),
   red (Cpar c1 c2) ss (Cpar c1 c2') ss'
 | red_Par3: forall ss, red (Cpar Cskip Cskip) ss Cskip ss
-| red_Loop: forall b c ss, 
+| red_Loop: forall b c ss,
   red (Cwhile b c) ss (Cif b (Cseq c (Cwhile b c)) Cskip) ss
 | red_Res1: forall r c ss c' ss'
   (R: red c ss c' ss'),
   red (Cresource r c) ss (Cresource r c') ss'
 | red_Res2: forall r ss, red (Cresource r Cskip) ss Cskip ss
-| red_With1: forall r b c ss 
+| red_With1: forall r b c ss
   (B: bdenot b (fst ss)),
   red (Cwith r b c) ss (Cinwith r c) ss
 | red_With2:  forall r c ss c' ss'
   (R: red c ss c' ss')
-  (NIN: ~ In r (locked c')),
+  (NIN: r \notin (locked c')),
   red (Cinwith r c) ss (Cinwith r c') ss'
 | red_With3: forall r ss, red (Cinwith r Cskip) ss Cskip ss
 | red_Assign: forall x e ss ss' s h
@@ -199,7 +205,7 @@ Inductive red: cmd -> state -> cmd -> state -> Prop :=
   race condition is. Note that we do not count memory allocation as a
   memory access because the memory cell allocated is fresh. *)
 
-Fixpoint accesses c s := 
+Fixpoint accesses c s :=
   match c with
     | Cskip => nil
     | (Cassign x e)   => nil
@@ -238,15 +244,15 @@ Fixpoint writes c s :=
   step. The soundness statement of the logic asserts that these
   transitions never occur. *)
 
-Inductive aborts : cmd -> state -> Prop := 
+Inductive aborts : cmd -> state -> Prop :=
 | aborts_Seq : forall c1 c2 ss (A: aborts c1 ss), aborts (Cseq c1 c2) ss
 | aborts_Par1: forall c1 c2 ss (A: aborts c1 ss), aborts (Cpar c1 c2) ss
 | aborts_Par2: forall c1 c2 ss (A: aborts c2 ss), aborts (Cpar c1 c2) ss
-| aborts_Race1: forall c1 c2 ss 
-    (ND: ~ disjoint (accesses c1 (fst ss)) (writes c2 (fst ss))), 
+| aborts_Race1: forall c1 c2 ss
+    (ND: ~ disjoint (accesses c1 (fst ss)) (writes c2 (fst ss))),
     aborts (Cpar c1 c2) ss
-| aborts_Race2: forall c1 c2 ss 
-    (ND: ~ disjoint (writes c1 (fst ss)) (accesses c2 (fst ss))), 
+| aborts_Race2: forall c1 c2 ss
+    (ND: ~ disjoint (writes c1 (fst ss)) (accesses c2 (fst ss))),
     aborts (Cpar c1 c2) ss
 | aborts_Res: forall r c ss (A: aborts c ss), aborts (Cresource r c) ss
 | aborts_Atom: forall r c ss (A: aborts c ss), aborts (Cinwith r c) ss
@@ -269,45 +275,56 @@ must satisfy mutual exclusion.  *)
 
 Fixpoint wf_cmd c :=
   match c with
-    | Cskip         => True
-    | Cassign x e   => True
-    | Cread x e     => True
-    | Cwrite e e'   => True
-    | Calloc x e    => True
-    | Cdispose e    => True
-    | Cseq c1 c2    => wf_cmd c1 /\ wf_cmd c2
-    | Cpar c1 c2    => wf_cmd c1 /\ wf_cmd c2 /\ disjoint (locked c1) (locked c2)
-    | Cif b c1 c2   => user_cmd c1 /\ user_cmd c2
+    | Cskip         => true
+    | Cassign x e   => true
+    | Cread x e     => true
+    | Cwrite e e'   => true
+    | Calloc x e    => true
+    | Cdispose e    => true
+    | Cseq c1 c2    => wf_cmd c1 && wf_cmd c2
+    | Cpar c1 c2    => wf_cmd c1 && wf_cmd c2 && disjoint (locked c1) (locked c2)
+    | Cif b c1 c2   => user_cmd c1 && user_cmd c2
     | Cwhile b c    => user_cmd c
     | Cresource r c => wf_cmd c
     | Cwith r b c   => user_cmd c
-    | Cinwith r c   => wf_cmd c /\ ~ In r (locked c)
+    | Cinwith r c   => wf_cmd c && (r \notin (locked c))
   end.
 
 (** Some basic properties: all user commands are well formed;
   well-formedness is preserved under reduction; user commands cannot
   immediately release a lock (they must have acquired it first). *)
 
-Lemma user_cmdD: forall c, user_cmd c -> wf_cmd c /\ locked c = nil.
+Lemma user_cmdD: forall c, user_cmd c -> wf_cmd c && (locked c == nil).
 Proof.
-  by induction c; simpl; intuition;
-     repeat match goal with H: _ = nil |- _ => rewrite H end.
+elim=>//=.
+- by move=>? H1 ? H2 /andP [u1 u2]; case/andP: (H1 u1)=>->->; case/andP: (H2 u2)=>->.
+- by move=>? H1 ? H2 /andP [u1 u2]; case/andP: (H1 u1)=>-> /eqP ->; case/andP: (H2 u2)=>-> /eqP ->.
+- by move=>_ ? _ ? _ /andP [->->].
+- by move=>_ ? _ ->.
+- by move=>? ? H u; case/andP: (H u)=>-> /eqP ->.
+by move=>_ _ ? _ ->.
 Qed.
 
-Lemma user_cmd_locked: forall c, user_cmd c -> locked c = nil.
+Lemma user_cmd_locked: forall c, user_cmd c -> locked c == nil.
 Proof.
-  by induction c; simpl; intuition;
-     repeat match goal with H: _ = nil |- _ => rewrite H end.
+elim=>//=.
+- by move=>? H1 ? H2 /andP [u1 _]; apply: (H1 u1).
+- by move=>? H1 ? H2 /andP [u1 u2]; move/eqP: (H1 u1) =>->; move/eqP: (H2 u2) =>->.
+by move=>? ? H u; move/eqP: (H u)=>->.
 Qed.
-Hint Immediate user_cmd_locked.
+Hint Immediate user_cmd_locked : core.
 
 Lemma user_cmd_wf: forall c, user_cmd c -> wf_cmd c.
-Proof. pose proof user_cmdD; firstorder. Qed.
-Hint Immediate user_cmd_wf.
+Proof. by move=>c u; case/andP: (user_cmdD u). Qed.
+Hint Immediate user_cmd_wf : core.
 
-Lemma locked_locks: forall r c, In r (locked c) -> In r (locks c).
+Lemma locked_locks: forall r c, r \in (locked c) -> r \in (locks c).
 Proof.
-  induction c; simpl; rewrite ?in_app_iff, ?In_removeAll in *; intuition.
+move=>r; elim=>//=.
+- by move=>c1 H1 c2 H2 H; rewrite mem_cat (H1 H).
+- by move=>c1 H1 c2 H2; rewrite !mem_cat => /orP; case; [move/H1=>->|move/H2=>->; rewrite orbC].
+- by move=>r0 c H; rewrite !mem_filter /= => /andP [->] /H ->.
+by move=>r0 c H; rewrite !in_cons => /orP; case; [move=>->| move/H=>->; rewrite orbC].
 Qed.
 
 Lemma red_wf_cmd:
@@ -316,19 +333,30 @@ Lemma red_wf_cmd:
     (WF: wf_cmd c),
     wf_cmd c'.
 Proof.
-  induction 1; simpl in *; intros; des; clarify; intuition.
-  by rewrite (user_cmd_locked WF) in H; inv H. 
+move=>c ss c' ss'; elim=>//=.
+- by move=>????? _ H /andP [/H->->].
+- by move=>???? _ /andP [/user_cmd_wf].
+- by move=>???? _ /andP [_ /user_cmd_wf].
+- by move=>????? _ H -> /andP [/andP [/H->]->].
+- by move=>????? _ H -> /andP [/andP [->] /H->].
+- by move=>???->.
+- by move=>????? u; rewrite (user_cmd_wf u); move/eqP: (user_cmd_locked u)=>->.
+by move=>????? _ H -> /andP [/H ->].
 Qed.
 
 Lemma disjoint_locked :
-  forall C, wf_cmd C -> disjoint_list (locked C).
-Proof.  
-  induction C; ins; desf; auto using disjoint_list_removeAll, disjoint_list_app.
+  forall C, wf_cmd C -> uniq (locked C).
+Proof.
+elim=>//=.
+- by move=>? H1 ?? /andP [/H1].
+- by move=>? H1 ? H2 /andP [/andP [/H1 u1] /H2 u2]; rewrite cat_uniq u1 u2 /disjoint =>->.
+- by move=>?? H /H; apply: filter_uniq.
+by move=>r c H /andP [/H ->] ->.
 Qed.
 
 (** ** Free variables, updated variables and substitutions *)
 
-(** The free variables of expressions, boolean expressions, assertions, 
+(** The free variables of expressions, boolean expressions, assertions,
     commands and environments are defined as expected: *)
 
 Fixpoint fvE e :=
@@ -338,7 +366,7 @@ Fixpoint fvE e :=
     | (Eplus e1 e2) => fvE e1 ++ fvE e2
   end.
 
-Fixpoint fvB b := 
+Fixpoint fvB b :=
   match b with
     | Beq e1 e2   => fvE e1 ++ fvE e2
     | Band b1 b2  => fvB b1 ++ fvB b2
@@ -362,7 +390,7 @@ Fixpoint fvC c :=
     | (Cinwith r c)   => fvC c
   end.
 
-(** Below, we define the set of syntactically updated variables 
+(** Below, we define the set of syntactically updated variables
   of a command. This set overapproximates the set of variables that
   are actually updated during the command's execution. *)
 
@@ -386,9 +414,9 @@ Fixpoint wrC c :=
 (** We also define the operation of substituting an expression for
 a variable in expressions and assertions. *)
 
-Fixpoint subE x e e0 := 
-  match e0 with 
-    | Evar y      => (if Z.eq_dec x y then e else Evar y)
+Fixpoint subE x e e0 :=
+  match e0 with
+    | Evar y      => if x == y then e else Evar y
     | Enum n      => Enum n
     | Eplus e1 e2 => Eplus (subE x e e1) (subE x e e2)
   end.
@@ -403,44 +431,50 @@ Fixpoint subB x e b :=
 Lemma subE_assign:
  forall x e e' s, edenot (subE x e e') s = edenot e' (upd s x (edenot e s)).
 Proof.
-unfold upd; induction e'; simpl in *; intros; clarify; desf; eauto.
-by rewrite IHe'1, IHe'2.
+rewrite /upd=>??; elim=>//=.
+- by move=>??; rewrite eq_sym; case: ifP.
+by move=>? H1 ? H2 s; rewrite (H1 s) (H2 s).
 Qed.
 
 Lemma subB_assign:
   forall x e b s, bdenot (subB x e b) s = bdenot b (upd s x (edenot e s)).
 Proof.
-  induction b; simpl; intros; clarify; repeat rewrite subE_assign; try congruence.
+move=>??; elim=>/=.
+- by move=>???; rewrite !subE_assign.
+- by move=>? H1 ? H2 s; rewrite (H1 s) (H2 s).
+by move=>b H s; rewrite (H s).
 Qed.
 
 (** Definition of two stacks agreeing on a set of variables *)
 
-Definition agrees (X : list rname) (s s' : stack) := forall x, In x X -> s x = s' x.
+Definition agrees (X : seq rname) (s s' : stack) := forall x, x \in X -> s x = s' x.
 
-Lemma agrees_union: 
+Lemma agrees_union:
   forall X Y s s', agrees (X ++ Y) s s' <-> (agrees X s s' /\ agrees Y s s').
 Proof.
-  unfold agrees; intuition; eapply in_app_iff in H; intuition.
+rewrite /agrees=>????; split.
+- by move=>H; split=>x H0; move: (H x); apply; rewrite mem_cat H0 // orbC.
+by case=>H1 H2 ?; rewrite mem_cat=>/orP [/H1|/H2].
 Qed.
 
 Lemma agreesC: forall X x y, agrees X x y -> agrees X y x.
-Proof. unfold agrees; intuition (symmetry; eauto). Qed.
+Proof. by rewrite /agrees=>??? H ? /H. Qed.
 
-Hint Immediate agreesC.
+Hint Immediate agreesC : core.
 
 Lemma agrees_tl: forall X Y x y, agrees (X :: Y) x y -> agrees Y x y.
-Proof. red; intros; eapply H; vauto. Qed.
+Proof. by rewrite /agrees=>???? H ? H0; apply/H; rewrite in_cons H0 orbC. Qed.
 
 Lemma agrees_app1: forall X Y x y, agrees (X ++ Y) x y -> agrees X x y.
-Proof. red; intros; eapply H, in_app_iff; vauto. Qed.
+Proof. by rewrite /agrees=>???? H ? H0; apply/H; rewrite mem_cat H0. Qed.
 
 Lemma agrees_app2: forall X Y x y, agrees (X ++ Y) x y -> agrees Y x y.
-Proof. red; intros; eapply H, in_app_iff; vauto. Qed.
+Proof. by rewrite /agrees=>???? H ? H0; apply/H; rewrite mem_cat H0 orbC. Qed.
 
-Hint Immediate agrees_app1 agrees_app2.
+Hint Immediate agrees_app1 agrees_app2 : core.
 
-Lemma agrees_imp: forall X Y x y, agrees X x y -> (forall z, In z Y -> In z X) -> agrees Y x y.
-Proof. red; intros; eapply H; eauto. Qed.
+Lemma agrees_imp: forall X Y x y, agrees X x y -> {subset Y <= X} -> agrees Y x y.
+Proof. by rewrite /agrees=>???? H H2 ? H0; apply/H/H2. Qed.
 
 (** ** Basic properties of the semantics *)
 
@@ -448,55 +482,90 @@ Proof. red; intros; eapply H; eauto. Qed.
 
 Lemma prop1_E: forall e s s', agrees (fvE e) s s' -> edenot e s = edenot e s'.
 Proof.
- induction e; simpl; intros; clarify.
- by apply H; vauto.
- by erewrite IHe1, IHe2; eauto. 
+elim=>//=.
+- by move=>???; apply; apply: mem_head.
+by move=>? H1 ? H2 ?? /agrees_union [/H1-> /H2->].
 Qed.
 
 Lemma prop1_B: forall b s s', agrees (fvB b) s s' -> bdenot b s = bdenot b s'.
 Proof.
-  induction b; simpl; intros; clarify; try rewrite agrees_union in *; f_equal; intuition.
-  by rewrite (prop1_E H0), (prop1_E H1). 
+elim=>/=.
+- by move=>???? /agrees_union [/prop1_E -> /prop1_E ->].
+- by move=>? H1 ? H2 ?? /agrees_union [/H1 -> /H2 ->].
+by move=>? H s1 s2 a; rewrite (H _ _ a).
 Qed.
 
 Corollary prop1_E2 :
-  forall x E (NIN: ~ In x (fvE E)) s v, edenot E (upd s x v) = edenot E s.
-Proof. ins; apply prop1_E; red; unfold upd; ins; desf. Qed. 
+  forall x E (NIN: x \notin (fvE E)) s v, edenot E (upd s x v) = edenot E s.
+Proof.
+move=>?? H ??; apply/prop1_E; rewrite /upd /agrees=>?.
+by case: eqP=>//->; move/negbTE: H=>->.
+Qed.
 
 Corollary prop1_B2 :
-  forall x B (NIN: ~ In x (fvB B)) s v, bdenot B (upd s x v) = bdenot B s.
-Proof. ins; apply prop1_B; red; unfold upd; ins; desf. Qed. 
+  forall x B (NIN: x \notin (fvB B)) s v, bdenot B (upd s x v) = bdenot B s.
+Proof.
+move=>?? H ??; apply/prop1_B; rewrite /upd /agrees=>?.
+by case: eqP=>//->; move/negbTE: H=>->.
+Qed.
 
 (** Properties of memory accesses: *)
 
-Lemma writes_accesses: 
-  forall C s a, In a (writes C s) -> In a (accesses C s).
-Proof. induction C; ins; rewrite in_app_iff in *; intuition. Qed.
-
-Lemma accesses_agrees: 
-  forall C s s' (A: agrees (fvC C) s s'), accesses C s = accesses C s'.
-Proof. 
-  induction C; ins; eauto; f_equal; eauto; eapply prop1_E; eauto.
-  by red; ins; eapply A; vauto.
+Lemma writes_accesses:
+  forall C s, {subset writes C s <= accesses C s}.
+Proof.
+elim=>//=; try by [move=>*; apply: sub_refl].
+by move=>? H1 ? H2 ??; rewrite !mem_cat=>/orP [/H1->|/H2->] //; rewrite orbC.
 Qed.
 
-Lemma writes_agrees : 
+Lemma accesses_agrees:
+  forall C s s' (A: agrees (fvC C) s s'), accesses C s = accesses C s'.
+Proof.
+elim=>//=.
+- by move=>???? /agrees_tl/prop1_E ->.
+- by move=>???? /agrees_union [/prop1_E ->].
+- by move=>??? /prop1_E ->.
+- by move=>? H1 ???? /agrees_union [/H1].
+by move=>? H1 ? H2 ?? /agrees_union [/H1-> /H2->].
+Qed.
+
+Lemma writes_agrees :
   forall C s s' (A: agrees (fvC C) s s'), writes C s = writes C s'.
-Proof. 
-  induction C; ins; eauto; f_equal; eauto using prop1_E.
+Proof.
+elim=>//=.
+- by move=>???? /agrees_union [/prop1_E ->].
+- by move=>??? /prop1_E ->.
+- by move=>? H1 ? H2 ?? /agrees_union [/H1].
+by move=>? H1 ? H2 ?? /agrees_union [/H1-> /H2 ->].
 Qed.
 
 (** Proposition 2 in the paper, describing how [fvC] and [wrC]
 interact with execution steps. *)
 
-Lemma prop2: 
+Lemma prop2:
  forall C ss C' ss' (STEP: red C ss C' ss'),
-      (forall x, In x (fvC C') -> In x (fvC C))
-   /\ (forall x, In x (wrC C') -> In x (wrC C))
-   /\ (forall x, In x (locks C') -> In x (locks C))
-   /\ (forall x, ~ In x (wrC C) -> fst ss' x = fst ss x).
+      {subset fvC   C' <= fvC   C}
+   /\ {subset wrC   C' <= wrC   C}
+   /\ {subset locks C' <= locks C}
+   /\ (forall x, x \notin wrC C -> ss'.1 x = ss.1 x).
 Proof.
-  induction 1; ins; intuition; repeat rewrite in_app_iff in *; intuition; clarify;
-  unfold upd; simpl; rewrite ?In_removeAll in *; desf; eauto; exfalso; eauto.
+move=>C ss C' ss'; elim=>//=.
+- by move=>??; do!split=>//.
+- move=>????? H [? [? [? H0]]]; do!split; try by [apply: sub_cat].
+  by move=>x; rewrite mem_cat negb_or => /andP [H1 _]; apply: (H0 x).
+- by move=>???? H; do!split; move=>?; rewrite !mem_cat=>-> //; rewrite orbC.
+- by move=>???? H; do!split; move=>?; rewrite !mem_cat=>-> //; rewrite orbC // -orbA orbC.
+- move=>????? H [? [? [? H0]]] ?; do!split; try by [apply: sub_cat].
+  by move=>x; rewrite mem_cat negb_or => /andP [H1 _]; apply: (H0 x).
+- move=>????? H [? [? [? H0]]] ?; do!split; try by [apply: sub_cat_l]; try by [apply: sub_cat].
+  by move=>x; rewrite mem_cat negb_or => /andP [_ H1]; apply: (H0 x).
+- by move=>???; rewrite !cats0; do!split; rewrite 1?catA; apply: sub_ctr.
+- by move=>????? H [? [? [? H0]]]; do!split=>//; apply: sub_filt.
+- by move=>?????; do!split=>//; move=>?; rewrite !mem_cat=>->; rewrite orbC.
+- by move=>????? H [? [? [H0 ?]]] ?; do!split=>//; move=>?; rewrite !in_cons=>/orP [->|/H0 ->] //; rewrite orbC.
+- by move=>??????->->; do!split=>//; move=>? /=; rewrite mem_seq1 /upd; case: ifP.
+- by move=>???????->?->; do!split=>//; move=>? /=; rewrite mem_seq1 /upd; case: ifP.
+- by move=>??????->->; do!split.
+- by move=>???????->?->; do!split=>//; move=>? /=; rewrite mem_seq1 /upd; case: ifP.
+by move=>?????->->; do!split.
 Qed.
-
