@@ -112,6 +112,41 @@ Qed.
 
 Definition disjoint {A : eqType} (p q : seq A) := ~~ has (mem p) q.
 
+Definition lminus {A : eqType} (p q : seq A) := filter (predC (mem q)) p.
+
+Lemma remove_lminus {A : eqType} y (l l' : seq A) : filter (predC1 y) (lminus l l') = lminus (filter (predC1 y) l) l'.
+Proof.
+by rewrite /lminus -!filter_predI /predI; apply/eq_in_filter=>x H /=; rewrite andbC.
+Qed.
+
+Lemma cat_lminus {A : eqType} (p q r : seq A) : lminus p (q ++ r) = lminus (lminus p q) r.
+Proof.
+by rewrite /lminus -filter_predI /predI; apply/eq_in_filter=>x H /=; rewrite mem_cat negb_or andbC.
+Qed.
+
+Lemma canc_lminus {A : eqType} (p q r : seq A) : disjoint p r ->
+    lminus (p ++ r) (q ++ r) = lminus p q.
+Proof.
+move=>H; rewrite cat_lminus /lminus -filter_predI filter_cat.
+have E : [seq x <- r | predI [predC r] [predC q] x] = [::]
+  by rewrite -(filter_pred0 r); apply/eq_in_filter=>x Hx /=; rewrite Hx.
+rewrite E cats0; apply/eq_in_filter=>x Hx /=.
+move: H; rewrite /disjoint => /hasPn /(_ x) /=; rewrite Hx.
+by case: (x \in r) =>// /(_ erefl).
+Qed.
+
+(* repetition *)
+Lemma cancr_lminus {A : eqType} (p q r : seq A) : disjoint r p ->
+    lminus (r++p) (r++q) = lminus p q.
+Proof.
+move=>H; rewrite cat_lminus /lminus -filter_predI filter_cat.
+have E : [seq x <- r | predI [predC q] [predC r] x] = [::]
+  by rewrite -(filter_pred0 r); apply/eq_in_filter=>x Hx /=; rewrite Hx andbC.
+rewrite E /=; apply/eq_in_filter=>x Hx /=.
+move: H; rewrite /disjoint => /hasPn /(_ x) /=; rewrite Hx.
+by case: (x \in r) =>// /(_ erefl); rewrite andbC.
+Qed.
+
 Lemma sub_cat {A : eqType} : forall (p q r : seq A), {subset p <= q} -> {subset p++r <= q++r}.
 Proof.
 by move=>p q r H x; rewrite !mem_cat=>/orP [/H ->|->] //; rewrite orbC.

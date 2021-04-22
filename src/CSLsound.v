@@ -1,4 +1,4 @@
-From Coq Require Import ssreflect ssrbool ssrfun.
+From Coq Require Import ssreflect ssrbool ssrfun List.
 From mathcomp Require Import ssrnat ssrint ssralg eqtype seq path.
 From cslsound Require Import (*HahnBase ZArith List*) Basic Lang.
 
@@ -67,22 +67,19 @@ elim: l h=>//= a l H h; rewrite in_cons=>/orP H1 /andP [Ha Hu]; case: H1.
   by apply/allP=>x /=; case: eqP Ha=>//-> /[swap] ->.
 move=>Hr; case: eqP=>/=; first by move: Ha => /[swap] ->; rewrite Hr.
 move=>Hn; split.
-- move=>[h1 [h2 [H0 [H1 [H2 <-]]]]].
-  move: ((H h2 Hr Hu).1 H1)=>[h3 [h4 [HH1 [HH2 [HH3 HH4]]]]].
-
-  destruct ss as [s h]; ins.
-  revert h; induction l; ins; des; clarify.
-    by destruct Z.eq_dec; clarify; rewrite removeAll_notin.
-  destruct Z.eq_dec; simpls; clarify.
-  split; intros; des; clarify; eauto.
-    eapply IHl in H0; eauto; desf; rewrite hdef_hplus2 in *; desf.
-    by do 3 eexists; eauto; repeat eexists; eauto;
-       (* try apply hdef_hplus; *) auto using hplusAC.
-  rewrite hdef_hplus2 in *; desf.
-  do 3 eexists; eauto; repeat eexists.
-    by eapply IHl; eauto; repeat eexists; eauto.
-  eapply hdef_hplus2; eauto.
-  eauto using hplusAC.
+- move=>[h1][h2][H0][H1][H2]<-.
+  move: ((H h2 Hr Hu).1 H1)=>[h3][h4][HH1][HH2][HH3]HH4.
+  move: H1 H2; rewrite -{}HH4=>_ H2. move/hdef_hplus2: H2=>[H21 H22].
+  exists h3, (hplus h1 h4); do!split=>//.
+  exists h1, h4; do!split=>//.
+  - by apply/hdef_hplus2; split; [apply/hdefC|].
+  by rewrite hplusAC.
+move=>[h1][h2][H1][[h3][h4][H2][H3][H4 <-]][H6 <-].
+move/hdef_hplus2: H6=>[H5 H6].
+exists h3, (hplus h1 h4); do!split=>//.
+- by apply: (H (hplus h1 h4) Hr Hu).2; exists h1, h4; do!split.
+- by apply/hdef_hplus2; split; [apply/hdefC|].
+by rewrite hplusAC.
 Qed.
 
 (** ** Precision
@@ -101,63 +98,68 @@ Definition precise p :=
     (D': hdef h1' h2'),
     h1 = h1'.
 
-Ltac inss := ins; desf; unnw; intuition; desf.
+(*Ltac inss := ins; desf; unnw; intuition; desf.*)
 
 (** The empty assertion, emp, is precise. *)
 
 Lemma precise_emp: precise Aemp.
-Proof. by red; ins; extensionality x; rewrite SAT, SAT'. Qed.
+Proof. by move=>/= ?????->->. Qed.
 
 (** Star conjunction of precise assertions is precise. *)
 
 Lemma precise_star p q: precise p -> precise q -> precise (Astar p q).
 Proof.
-  unfold precise; ins; desf.
-  rewrite ?hdef_hplus, ?hplusA in *; des.
-  assert (h4 = h0) by eauto.
-  clarify; f_equal; rewrite (hplusAC h2), (hplusAC h2') in EQ; eauto.
+rewrite /precise=>/= H1 H2 ? h01 ? h02 ? [h1][h2][Hs1][Hs2][H12]<-[h3][h4][Hs3][Hs4][H34]<-HE /hdef_hplus [HD1 HD2] /hdef_hplus [HD3 HD4].
+rewrite !hplusA in HE.
+have H13 : h1 = h3 by eauto.
+move: H12 HD1 HE; rewrite H13 => H12 HD1 HE; f_equal.
+rewrite (hplusAC h01) in HE; last by apply hdefC.
+rewrite (hplusAC h02) in HE; last by apply hdefC.
+by eauto.
 Qed.
 
 Lemma precise_istar:
-  forall l (P: forall x (IN: In x l), precise x), precise (Aistar l).
-Proof. by induction l; ins; auto using precise_emp, precise_star. Qed.
+  forall (l : seq assn) (P: forall x, In x l -> precise x), precise (Aistar l).
+Proof.
+elim=>/=.
+- by move=> _; apply: precise_emp.
+move=>?? H H2; apply: precise_star.
+- by apply: H2; left.
+by apply: H=>x Hx; apply: H2; right.
+Qed.
 
 (** ** Auxiliary definitions for resource invariants *)
 
 Definition assn_lift po := match po with None => Aemp | Some p => p end.
 
 Definition envs G (l l' : list rname) :=
-  (Aistar (map (fun x => assn_lift (G x)) (list_minus Z.eq_dec l l'))).
+  (Aistar (map (fun x => assn_lift (G x)) (lminus l l'))).
 
 Lemma sat_envs_expand:
-  forall r l l' (IN: In r l) (NIN: ~ In r l')
-    (LD: disjoint_list l) J ss,
+  forall r l l' (IN: r \in l) (NIN: r \notin l')
+    (LD: uniq l) J ss,
     sat ss (envs J l l')
-    <-> exists h1 h2, sat (fst ss, h1) (assn_lift (J r))
-              /\ sat (fst ss, h2) (envs J (removeAll Z.eq_dec l r) l')
-              /\ snd ss = hplus h1 h2 /\ hdef h1 h2.
+    <-> exists h1 h2, sat (ss.1, h1) (assn_lift (J r))
+              /\ sat (ss.1, h2) (envs J (filter (predC1 r) l) l')
+              /\ ss.2 = hplus h1 h2 /\ hdef h1 h2.
 Proof.
-  unfold envs; ins.
-  rewrite (sat_istar_map_expand (r := r)), removeAll_list_minus;
-    auto using disjoint_list_list_minus.
-    by intuition; simpls; desf; eauto 10.
-  by apply In_list_minus.
+rewrite /envs=>/= r l l' Hi Hn Hu ??.
+rewrite (sat_istar_map_expand (r:=r)).
+- by rewrite remove_lminus; split; move=>[h1][h2][H1][H2][H3] H4; exists h1, h2; do!split.
+- by rewrite /lminus mem_filter Hi /= Hn.
+by rewrite /lminus; apply/filter_uniq.
 Qed.
 
 Lemma envs_app1 :
   forall x z (D: disjoint x z) J y, envs J (x ++ z) (y ++ z) = envs J x y.
-Proof.
-  by unfold envs; ins; rewrite list_minus_appr.
-Qed.
+Proof. by rewrite /envs =>/= ?? H ??; rewrite canc_lminus. Qed.
 
 Lemma envs_app2 :
   forall x z (D: disjoint z x) J y, envs J (z ++ x) (z ++ y) = envs J x y.
-Proof.
-  by unfold envs; ins; rewrite list_minus_appl.
-Qed.
+Proof. by rewrite /envs =>/= ?? H ??; rewrite cancr_lminus. Qed.
 
 Lemma envs_removeAll_irr:
-  forall r l (NIN: ~ In r l) J l', envs J l (removeAll Z.eq_dec l' r) = envs J l l'.
+  forall r l (NIN: r \notin l) J l', envs J l (filter (predC1 r) l') = envs J l l'.
 Proof.
   by unfold envs; ins; rewrite list_minus_removeAll_irr.
 Qed.
