@@ -62,11 +62,12 @@ Lemma sat_istar_map_expand :
       /\ hdef h1 h2 /\ hplus h1 h2 = ss.2.
 Proof.
 move=>r l [s h] f.
-elim: l=>//= a l H H1 H2; split.
-- move=>[h1 [h2 [H0 [H01 [H02 H03]]]]].
-  move: H1; rewrite in_cons=>/orP; case.
-  - move/eqP=>->; rewrite eq_refl=>/=; exists h1, h2.
-    do!split=>//.
+elim: l=>//= a l H; rewrite in_cons=>/orP H1 /andP [Ha Hu]; case: H1.
+- move/eqP=>->; rewrite eq_refl=>/=; suff: all (predC1 a) l by move/all_filterP=>->.
+  by apply/allP=>x /=; case: eqP Ha=>//-> /[swap] ->.
+move=>Hr; case: eqP=>/=; first by move: Ha => /[swap] ->; rewrite Hr.
+move=>Hn; split.
+- move=>[h1 [h2 [H0 [H1 [H2 H3]]]]].
 
 
 
