@@ -17,6 +17,8 @@
 *.v.d
 *.vio
 *.vo
+*.vok
+*.vos
 .coq-native/
 .csdp.cache
 .lia.cache
@@ -28,3 +30,6 @@ lia.cache
 nia.cache
 nlia.cache
 nra.cache
+.CoqMakefile.d
+CoqMakefile
+CoqMakefile.conf

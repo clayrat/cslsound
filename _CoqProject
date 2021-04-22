@@ -1,0 +1,8 @@
+-Q . cslsound
+-arg -w -arg -notation-overridden
+-arg -w -arg -redundant-canonical-projection
+
+HahnBase.v
+Basic.v
+Lang.v
+CSLsound.v

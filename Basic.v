@@ -1,4 +1,5 @@
-Require Import HahnBase ZArith List.
+From Coq Require Import ZArith List.
+From cslsound Require Import HahnBase.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -7,15 +8,15 @@ Unset Strict Implicit.
 
 Definition heap  := Z -> option Z.
 
-Definition upd A (f: Z -> A) x y a := if Z.eq_dec a x then y else f a. 
+Definition upd A (f: Z -> A) x y a := if Z.eq_dec a x then y else f a.
 
 Definition hdef (h1 h2 : heap) := forall x, h1 x = None \/ h2 x = None.
 
-Definition hplus (h1 h2 : heap) : heap := 
+Definition hplus (h1 h2 : heap) : heap :=
   (fun x => match h1 x with None => h2 x | Some y => Some y end).
 
 Lemma hdefC : forall h1 h2, hdef h1 h2 -> hdef h2 h1.
-Proof. unfold hdef; firstorder. Qed. 
+Proof. unfold hdef; firstorder. Qed.
 
 Lemma hdefU h : hdef (fun _ => None) h.
 Proof. vauto. Qed.
@@ -23,44 +24,44 @@ Proof. vauto. Qed.
 Lemma hdefU2 h : hdef h (fun _ => None).
 Proof. vauto. Qed.
 
-Lemma hdef_hplus : 
+Lemma hdef_hplus :
   forall h1 h2 h3, hdef (hplus h1 h2) h3 <-> hdef h1 h3 /\ hdef h2 h3.
 Proof.
  unfold hdef, hplus; intuition
-   repeat match goal with H: _ |- _ => specialize (H x) end; 
+   repeat match goal with H: _ |- _ => specialize (H x) end;
      desf; vauto.
 Qed.
 
-Lemma hdef_hplus2 : 
+Lemma hdef_hplus2 :
   forall h1 h2 h3, hdef h1 (hplus h2 h3) <-> hdef h1 h2 /\ hdef h1 h3.
 Proof.
  unfold hdef, hplus; intuition
-   repeat match goal with H: _ |- _ => specialize (H x) end; 
+   repeat match goal with H: _ |- _ => specialize (H x) end;
      desf; vauto.
 Qed.
 
-Corollary hdef_hplus_a : 
+Corollary hdef_hplus_a :
   forall h1 h2 h3, hdef h1 h3 -> hdef h2 h3 -> hdef (hplus h1 h2) h3.
 Proof. by intros; apply hdef_hplus. Qed.
 
-Corollary hdef_hplus_b : 
+Corollary hdef_hplus_b :
   forall h1 h2 h3, hdef h1 h2 -> hdef h1 h3 -> hdef h1 (hplus h2 h3).
 Proof. by intros; apply hdef_hplus2. Qed.
 
 Hint Resolve hdef_hplus_a hdef_hplus_b.
 Hint Immediate hdefC.
 
-Lemma hplusA : 
+Lemma hplusA :
  forall h1 h2 h3, hplus (hplus h1 h2) h3 = hplus h1 (hplus h2 h3).
 Proof.
   by unfold hplus; ins; extensionality x; ins; desf.
 Qed.
 
-Lemma hplusC : 
+Lemma hplusC :
  forall h1 h2, hdef h1 h2 -> hplus h2 h1 = hplus h1 h2.
 Proof.
   unfold hplus; ins; extensionality x; desf.
-  destruct (H x); clarify. 
+  destruct (H x); clarify.
 Qed.
 
 Lemma hplusU h : hplus (fun _ => None) h = h.
@@ -70,13 +71,13 @@ Lemma hplusU2 h : hplus h (fun _ => None) = h.
 Proof. rewrite hplusC; vauto. Qed.
 
 
-Lemma hplusAC : 
+Lemma hplusAC :
  forall h1 h2 h3,
    hdef h1 h2 ->
    hplus h2 (hplus h1 h3) = hplus h1 (hplus h2 h3).
 Proof.
   unfold hplus; ins; extensionality x; desf.
-  destruct (H x); clarify. 
+  destruct (H x); clarify.
 Qed.
 
 Lemma hplusKl :
@@ -114,19 +115,19 @@ Definition disjoint A (xl yl : list A) :=
 Fixpoint removeAll A (eq_dec : forall x y : A, {x = y} + {x <> y}) l y :=
   match l with
     | nil => nil
-    | x :: l => 
+    | x :: l =>
       if eq_dec x y then removeAll eq_dec l y
       else x :: removeAll eq_dec l y
   end.
 
 Fixpoint list_minus A eq_dec (xl yl : list A) :=
-  match yl with 
+  match yl with
     | nil => xl
     | y :: yl => list_minus eq_dec (removeAll eq_dec xl y) yl
-  end. 
+  end.
 
 Lemma removeAll_notin :
- forall A dec (x : A) l (NIN: ~ In x l), 
+ forall A dec (x : A) l (NIN: ~ In x l),
    removeAll dec l x = l.
 Proof.
   by induction l; ins; desf; [exfalso | f_equal]; eauto.
@@ -145,16 +146,16 @@ Proof.
 Qed.
 
 Lemma removeAll_list_minus : forall A dec l l' (y : A),
-  removeAll dec (list_minus dec l l') y = 
+  removeAll dec (list_minus dec l l') y =
   list_minus dec (removeAll dec l y) l'.
 Proof.
-  by ins; revert l; induction l'; ins; rewrite IHl', removeAllC. 
+  by ins; revert l; induction l'; ins; rewrite IHl', removeAllC.
 Qed.
 
 Lemma In_removeAll : forall A dec l (x y : A),
   In x (removeAll dec l y) <-> In x l /\ x <> y.
 Proof.
-  induction l; ins; desf; simpl; rewrite ?IHl; 
+  induction l; ins; desf; simpl; rewrite ?IHl;
     split; ins; des; clarify; auto.
 Qed.
 
@@ -173,16 +174,16 @@ Proof. by unfold disjoint. Qed.
 Hint Resolve disjoint_nil disjoint_nil2.
 
 Lemma disjoint_list_app :
-  forall A (l1 l2 : list A), disjoint_list l1 -> disjoint_list l2 -> disjoint l1 l2 -> 
+  forall A (l1 l2 : list A), disjoint_list l1 -> disjoint_list l2 -> disjoint l1 l2 ->
     disjoint_list (l1 ++ l2).
-Proof.  
+Proof.
   unfold disjoint; induction l1; ins; rewrite in_app_iff in *; intuition eauto.
 Qed.
 
 Lemma disjoint_list_removeAll : forall A dec l (y : A),
   disjoint_list l -> disjoint_list (removeAll dec l y).
 Proof.
-  induction l; ins; desf; simpl; try rewrite In_removeAll; intuition. 
+  induction l; ins; desf; simpl; try rewrite In_removeAll; intuition.
 Qed.
 
 Lemma disjoint_list_list_minus A dec (l l' : list A) :
@@ -203,42 +204,42 @@ Proof.
   by induction l; ins; desf; rewrite IHl.
 Qed.
 
-Lemma list_minus_app A dec (x y z: list A) : 
+Lemma list_minus_app A dec (x y z: list A) :
     list_minus dec x (y ++ z) = list_minus dec (list_minus dec x y) z.
 Proof.
   by revert x; induction y; ins.
 Qed.
 
-Lemma list_minusC A dec (x y z: list A) : 
+Lemma list_minusC A dec (x y z: list A) :
     list_minus dec (list_minus dec x z) y = list_minus dec (list_minus dec x y) z.
 Proof.
   by revert x; induction y; ins; rewrite removeAll_list_minus, IHy.
 Qed.
 
 Lemma list_minus1:
-  forall A (x z: list A) (D: disjoint x z) dec w, 
+  forall A (x z: list A) (D: disjoint x z) dec w,
     list_minus dec (x ++ list_minus dec z w) z = x.
 Proof.
   induction z; ins; [by induction w; ins; apply app_nil_r|].
   rewrite removeAll_app, removeAll_list_minus; simpl; desf.
   rewrite <- removeAll_list_minus, <- removeAll_app, <- removeAll_list_minus, IHz.
-  by apply removeAll_irr; intro; eapply D; eauto using in_eq. 
+  by apply removeAll_irr; intro; eapply D; eauto using in_eq.
   by red; intros; eapply D; eauto using in_cons.
 Qed.
 
 Lemma list_minus2:
-  forall A (x z: list A) (D: disjoint z x) dec w, 
+  forall A (x z: list A) (D: disjoint z x) dec w,
     list_minus dec (list_minus dec z w ++ x) z = x.
 Proof.
   induction z; ins; [by induction w; ins|].
   rewrite removeAll_app, removeAll_list_minus; simpl; desf.
   rewrite <- removeAll_list_minus, <- removeAll_app, <- removeAll_list_minus, IHz; try done.
-  by apply removeAll_irr; intro; eapply D; eauto using in_eq. 
+  by apply removeAll_irr; intro; eapply D; eauto using in_eq.
   by red; intros; eapply D; eauto using in_cons.
 Qed.
 
 Lemma list_minus_appr:
-  forall A dec (x y z : list A), disjoint x z -> 
+  forall A dec (x y z : list A), disjoint x z ->
     list_minus dec (x ++ z) (y ++ z) = list_minus dec x y.
 Proof.
   ins; rewrite list_minus_app, list_minusC; f_equal.
@@ -246,27 +247,27 @@ Proof.
 Qed.
 
 Lemma list_minus_appl:
-  forall A dec (x y z : list A), disjoint z x -> 
+  forall A dec (x y z : list A), disjoint z x ->
     list_minus dec (z ++ x) (z ++ y) = list_minus dec x y.
 Proof.
   ins; rewrite list_minus_app; f_equal; apply (list_minus2 H dec nil).
-Qed. 
+Qed.
 
-Lemma list_minus_removeAll2 A dec x y (a: A) : 
+Lemma list_minus_removeAll2 A dec x y (a: A) :
     list_minus dec (removeAll dec x a) (removeAll dec y a)
-    = removeAll dec (list_minus dec x y) a. 
+    = removeAll dec (list_minus dec x y) a.
 Proof.
   revert x; induction y; ins; desf; simpls.
   by rewrite IHy, <- !removeAll_list_minus, removeAllK.
   by rewrite removeAllC, IHy.
 Qed.
 
-Lemma list_minus_removeAll_irr A dec (a: A) x (NIN: ~ In a x) y : 
+Lemma list_minus_removeAll_irr A dec (a: A) x (NIN: ~ In a x) y :
     list_minus dec x (removeAll dec y a) = list_minus dec x y.
 Proof.
   revert x NIN; induction y; ins; desf; simpls; try rewrite IHy; eauto.
   by rewrite removeAll_irr.
-  rewrite In_removeAll; intuition. 
+  rewrite In_removeAll; intuition.
 Qed.
 
 (** ** Miscellaneous useful lemmas *)
