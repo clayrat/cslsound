@@ -8,9 +8,19 @@ Unset Strict Implicit.
 Axiom fext : forall A (B : A -> Type) (f1 f2 : forall x, B x),
                (forall x, f1 x = f2 x) -> f1 = f2.
 
+(** ** Miscellaneous useful lemmas *)
+
+Lemma ex_iff : forall A p q (EQ: forall x : A, p x <-> q x),
+(exists x, p x) <-> (exists x, q x).
+Proof. firstorder. Qed.
+
+Lemma all_iff : forall A p q (EQ: forall x : A, p x <-> q x),
+(forall x, p x) <-> (forall x, q x).
+Proof. firstorder. Qed.
+
 (** ** The heap model *)
 
-Definition heap  := int -> option int.
+Definition heap := int -> option int.
 
 Definition upd A (f: int -> A) x y a := if a == x then y else f a.
 
@@ -110,21 +120,46 @@ move/(f_equal (@^~ x)): H (H1 x) (H2 x).
 by case: (h1 x); case: (h2 x)=>// a ->; case=>// _; case.
 Qed.
 
-Definition disjoint {A : eqType} (p q : seq A) := ~~ has (mem p) q.
+Section SeqStuff.
+Variable (A : eqType).
 
-Definition lminus {A : eqType} (p q : seq A) := filter (predC (mem q)) p.
+Definition disjoint (p q : seq A) := ~~ has (mem p) q.
 
-Lemma remove_lminus {A : eqType} y (l l' : seq A) : filter (predC1 y) (lminus l l') = lminus (filter (predC1 y) l) l'.
+Definition remove a (p : seq A) := filter (predC1 a) p.
+
+Definition lminus (p q : seq A) := filter (predC (mem q)) p.
+
+Lemma inNotin (p : seq A) a b : a \in p -> b \notin p -> a != b.
 Proof.
-by rewrite /lminus -!filter_predI /predI; apply/eq_in_filter=>x H /=; rewrite andbC.
+by move=>Ha Hb; apply/eqP=>He; rewrite -He Ha in Hb.
 Qed.
 
-Lemma cat_lminus {A : eqType} (p q r : seq A) : lminus p (q ++ r) = lminus (lminus p q) r.
+Lemma remove_lminus y (l l' : seq A) : remove y (lminus l l') = lminus (remove y l) l'.
+Proof.
+by rewrite /lminus /remove -!filter_predI /predI; apply/eq_in_filter=>x H /=; rewrite andbC.
+Qed.
+
+Lemma lminus_remove2 a (l l' : seq A) :
+    lminus (remove a l) (remove a l') = remove a (lminus l l').
+Proof.
+rewrite /lminus /remove => /=.
+rewrite -!filter_predI; apply/eq_in_filter=>x Hx /=.
+by rewrite mem_filter negb_and andb_orl andNb andbC /=.
+Qed.
+
+Lemma lminus_remove y (l l' : seq A) : y \notin l -> lminus l (remove y l') = lminus l l'.
+Proof.
+move=>H.
+have Hl : remove y l = l by apply/all_filterP/allP=>x; move: H=>/[swap] /=; exact: inNotin.
+by rewrite -{1}Hl lminus_remove2 remove_lminus Hl.
+Qed.
+
+Lemma cat_lminus (p q r : seq A) : lminus p (q ++ r) = lminus (lminus p q) r.
 Proof.
 by rewrite /lminus -filter_predI /predI; apply/eq_in_filter=>x H /=; rewrite mem_cat negb_or andbC.
 Qed.
 
-Lemma canc_lminus {A : eqType} (p q r : seq A) : disjoint p r ->
+Lemma canc_lminus (p q r : seq A) : disjoint p r ->
     lminus (p ++ r) (q ++ r) = lminus p q.
 Proof.
 move=>H; rewrite cat_lminus /lminus -filter_predI filter_cat.
@@ -136,7 +171,7 @@ by case: (x \in r) =>// /(_ erefl).
 Qed.
 
 (* repetition *)
-Lemma cancr_lminus {A : eqType} (p q r : seq A) : disjoint r p ->
+Lemma cancr_lminus (p q r : seq A) : disjoint r p ->
     lminus (r++p) (r++q) = lminus p q.
 Proof.
 move=>H; rewrite cat_lminus /lminus -filter_predI filter_cat.
@@ -147,26 +182,27 @@ move: H; rewrite /disjoint => /hasPn /(_ x) /=; rewrite Hx.
 by case: (x \in r) =>// /(_ erefl); rewrite andbC.
 Qed.
 
-Lemma sub_cat {A : eqType} : forall (p q r : seq A), {subset p <= q} -> {subset p++r <= q++r}.
+Lemma sub_cat : forall (p q r : seq A), {subset p <= q} -> {subset p++r <= q++r}.
 Proof.
 by move=>p q r H x; rewrite !mem_cat=>/orP [/H ->|->] //; rewrite orbC.
 Qed.
 
-Lemma sub_cat_l {A : eqType} : forall (p q r : seq A), {subset p <= q} -> {subset r++p <= r++q}.
+Lemma sub_cat_l : forall (p q r : seq A), {subset p <= q} -> {subset r++p <= r++q}.
 Proof.
 by move=>p q r H x; rewrite !mem_cat=>/orP [->|/H ->]//; rewrite orbC.
 Qed.
 
-Lemma sub_ctr {A : eqType} : forall (p : seq A), {subset p++p <= p}.
+Lemma sub_ctr : forall (p : seq A), {subset p++p <= p}.
 Proof.
 by move=>p x; rewrite mem_cat orbb.
 Qed.
 
-Lemma sub_filt {A : eqType} : forall p (q r : seq A), {subset q <= r} -> {subset filter p q <= filter p r}.
+Lemma sub_filt : forall p (q r : seq A), {subset q <= r} -> {subset filter p q <= filter p r}.
 Proof.
 by move=>p q r H x; rewrite !mem_filter=>/andP [-> /H].
 Qed.
 
+End SeqStuff.
 (** ** Basic list operations *)
 (*
 Fixpoint disjoint_list A (l : seq A) :=
@@ -334,22 +370,5 @@ Proof.
   revert x NIN; induction y; ins; desf; simpls; try rewrite IHy; eauto.
   by rewrite removeAll_irr.
   rewrite In_removeAll; intuition.
-Qed.
-
-(** ** Miscellaneous useful lemmas *)
-
-Lemma ex_iff : forall A p q (EQ: forall x : A, p x <-> q x),
-  (exists x, p x) <-> (exists x, q x).
-Proof. firstorder. Qed.
-
-Lemma all_iff : forall A p q (EQ: forall x : A, p x <-> q x),
-  (forall x, p x) <-> (forall x, q x).
-Proof. firstorder. Qed.
-
-Lemma Eq_in_map:
-  forall (T1 T2 : Type) (f1 f2 : T1 -> T2) (s : list T1),
-  (forall x (IN: In x s), f1 x = f2 x) -> map f1 s = map f2 s.
-Proof.
-  induction s; ins; f_equal; auto.
 Qed.
 *)

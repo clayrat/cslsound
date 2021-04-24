@@ -58,12 +58,12 @@ Lemma sat_istar_map_expand :
   forall r l ss (f : int -> assn) (IN: r \in l) (DL: uniq l),
     sat ss (Aistar (map f l))
     <-> exists h1 h2, sat (ss.1, h1) (f r)
-      /\ sat (ss.1, h2) (Aistar (map f (filter (predC1 r) l)))
+      /\ sat (ss.1, h2) (Aistar (map f (remove r l)))
       /\ hdef h1 h2 /\ hplus h1 h2 = ss.2.
 Proof.
 move=>r l [s h] f.
 elim: l h=>//= a l H h; rewrite in_cons=>/orP H1 /andP [Ha Hu]; case: H1.
-- move/eqP=>->; rewrite eq_refl=>/=; suff: all (predC1 a) l by move/all_filterP=>->.
+- move/eqP=>->; rewrite /remove eq_refl=>/=; suff: all (predC1 a) l by move/all_filterP=>->.
   by apply/allP=>x /=; case: eqP Ha=>//-> /[swap] ->.
 move=>Hr; case: eqP=>/=; first by move: Ha => /[swap] ->; rewrite Hr.
 move=>Hn; split.
@@ -140,7 +140,7 @@ Lemma sat_envs_expand:
     (LD: uniq l) J ss,
     sat ss (envs J l l')
     <-> exists h1 h2, sat (ss.1, h1) (assn_lift (J r))
-              /\ sat (ss.1, h2) (envs J (filter (predC1 r) l) l')
+              /\ sat (ss.1, h2) (envs J (remove r l) l')
               /\ ss.2 = hplus h1 h2 /\ hdef h1 h2.
 Proof.
 rewrite /envs=>/= r l l' Hi Hn Hu ??.
@@ -159,32 +159,36 @@ Lemma envs_app2 :
 Proof. by rewrite /envs =>/= ?? H ??; rewrite cancr_lminus. Qed.
 
 Lemma envs_removeAll_irr:
-  forall r l (NIN: r \notin l) J l', envs J l (filter (predC1 r) l') = envs J l l'.
+  forall r l (NIN: r \notin l) J l', envs J l (remove r l') = envs J l l'.
 Proof.
-  by unfold envs; ins; rewrite list_minus_removeAll_irr.
+by rewrite /envs=>/= ?? H ??; rewrite lminus_remove.
 Qed.
 
 Lemma envs_removeAll2:
-  forall r l' (IN: In r l') J l,
-    envs J (removeAll Z.eq_dec l r) (removeAll Z.eq_dec l' r) = envs J l l'.
+  forall r l' (IN: r \in l') J l,
+    envs J (remove r l) (remove r l') = envs J l l'.
 Proof.
-  unfold envs; ins; rewrite list_minus_removeAll2.
-  f_equal; f_equal; revert l; induction l'; ins; desf.
-    by rewrite removeAll_list_minus, removeAllK.
-  by rewrite IHl'.
+rewrite /envs=>/= ? l' H ??; rewrite lminus_remove2.
+do 2!f_equal; rewrite /remove; apply/all_filterP/allP=>x Hy /=.
+rewrite eq_sym; apply/(inNotin (p:=l'))=>//.
+by move: Hy; rewrite mem_filter /= => /andP [].
 Qed.
 
 Lemma envs_cons2_irr:
-  forall r l (NIN: ~ In r l) J l', envs J (r :: l) (r :: l') = envs J l l'.
+  forall r l (NIN: r \notin l) J l', envs J (r :: l) (r :: l') = envs J l l'.
 Proof.
-  by unfold envs; ins; desf; rewrite removeAll_irr.
+rewrite /envs=> r ? H ?? /=; do 2!f_equal; rewrite in_cons eq_refl /=.
+rewrite /lminus; apply/eq_in_filter=>x Hx /=; rewrite in_cons negb_or.
+by suff: (x!=r); [move=>->| move: Hx H; apply/inNotin].
 Qed.
 
 Lemma envs_upd_irr : forall J r v l l',
-  ~ In r l \/ In r l' -> envs (upd J r v) l l' = envs J l l'.
+   r \notin l \/ r \in l' -> envs (upd J r v) l l' = envs J l l'.
 Proof.
-  unfold envs; ins; f_equal; apply Eq_in_map; unfold upd; ins; desf;
-  eapply In_list_minus in IN; intuition.
+rewrite /envs /upd=>????? H.
+f_equal; apply/eq_in_map=>x; rewrite mem_filter=> /andP /= [].
+case: ifP=>// /eqP -> H1 H2.
+by case: H; [rewrite H2|move:H1=>/[swap]->].
 Qed.
 
 (** ** Meaning of CSL judgments *)
@@ -199,14 +203,14 @@ another n steps.  *)
 Fixpoint safe (n : nat) (c: cmd) (s: stack) (h: heap) (gamma : rname -> option assn) (q: assn) :=
   match n with O => True
     | S n =>
-(* Condition (i) *)
-          << END: c = Cskip -> sat (s, h) q >>
-(* Condition (ii) *)
-       /\ << NAB: forall hF (D: hdef h hF) (ABORT: aborts c (s, hplus h hF)), False >>
-(* Condition (iii) *)
-       /\ << AOK: forall a (ACC: In a (accesses c s)), h a <> None >>
-(* Condition (iv) *)
-       /\ << SOK: forall hJ hF c' ss'
+(* Condition (i) END *)
+          (c = Cskip -> sat (s, h) q)
+(* Condition (ii) NAB *)
+       /\ (forall hF (D: hdef h hF) (ABORT: aborts c (s, hplus h hF)), False)
+(* Condition (iii) AOK *)
+       /\ (forall a (ACC: In a (accesses c s)), h a <> None)
+(* Condition (iv) SOK *)
+       /\ (forall hJ hF c' ss'
              (STEP: red c (s, hplus h (hplus hJ hF)) c' ss')
              (SAT: sat (s, hJ) (envs gamma (locked c') (locked c)))
              (D1: hdef h hJ)
@@ -218,13 +222,13 @@ Fixpoint safe (n : nat) (c: cmd) (s: stack) (h: heap) (gamma : rname -> option a
                   /\ hdef h' hF
                   /\ hdef hJ' hF
                   /\ sat (fst ss', hJ') (envs gamma (locked c) (locked c'))
-                  /\ safe n c' (fst ss') h' gamma q >>
+                  /\ safe n c' (fst ss') h' gamma q)
   end.
 
 (** Now, the meaning of triples (cf. Definitions 2 and 5 in paper) *)
 
 Definition CSL gamma p c q :=
-  << U: user_cmd c >> /\ << SF: forall n s h, sat (s, h) p -> safe n c s h gamma q >>.
+  user_cmd c /\ forall n s h, sat (s, h) p -> safe n c s h gamma q.
 
 (** ** Free variables and substitutions *)
 
@@ -234,8 +238,8 @@ Definition CSL gamma p c q :=
 Fixpoint fvA p :=
   match p with
     | Aemp            => (fun v => False)
-    | Apure B         => (fun v => In v (fvB B))
-    | Apointsto e1 e2 => (fun v => In v (fvE e1 ++ fvE e2))
+    | Apure B         => (fun v => v \in (fvB B))
+    | Apointsto e1 e2 => (fun v => v \in (fvE e1 ++ fvE e2))
     | Anot P          => fvA P
     | Astar P Q
     | Awand P Q
@@ -264,16 +268,30 @@ Fixpoint subA x e p :=
 Lemma fvA_istar :
   forall Ps v, fvA (Aistar Ps) v <-> (exists P, fvA P v /\ In P Ps).
 Proof.
-  induction Ps; ins; try rewrite IHPs; intuition; desf; eauto.
+elim=>/=.
+- by move=>?; split=>//; case=>? [].
+move=>a l IH v; split.
+- case=>H.
+  - by exists a; split=>//; left.
+  by move: ((IH v).1 H); case=>x [Ha Hi]; exists x; split=>//; right.
+case=>x [H]; case.
+- by move=>->; left.
+move=>Hi; right.
+by apply/((IH v).2); exists x; split.
 Qed.
 
 Lemma subA_assign:
   forall x e p s h, sat (s,h) (subA x e p) <-> sat (upd s x (edenot e s), h) p.
 Proof.
-  induction p; ins; repeat first
-    [done | apply ex_iff; intro|apply all_iff; intro
-      | rewrite subE_assign | rewrite subB_assign
-      | match goal with H: _ |- _ => rewrite H; clear H end].
+move=>??; elim=>? //=.
+- by move=>??; rewrite subB_assign.
+- by move=>H1 ? H2 ??; rewrite H1 H2.
+- by move=>H1 ? H2 ??; rewrite H1 H2.
+- by move=>H1 ? H2 ??; do 2![apply/ex_iff=>?]; rewrite H1 H2.
+- by move=>H1 ? H2 ??; apply/all_iff=>?; rewrite H1 H2.
+- by move=>H ??; rewrite H.
+- by move=>???; rewrite !subE_assign.
+by move=>H ??; apply/ex_iff=>?; rewrite H.
 Qed.
 
 (** * Soundness proof *)
@@ -285,20 +303,28 @@ Qed.
 Lemma prop1_A: forall p s s' (A: forall v (FV: fvA p v), s v = s' v) h,
   sat (s, h) p <-> sat (s', h) p.
 Proof.
-  ins; revert h; induction p; ins; repeat first
-    [done | apply ex_iff; intro|apply all_iff; intro
-      | rewrite (prop1_B A)
-      | match goal with H: _ |- _ => rewrite H; clear H end]; eauto.
-  by rewrite (prop1_E (agrees_app1 A)), (prop1_E (agrees_app2 A)).
+elim=>//=.
+- by move=>?? s' H ?; rewrite (prop1_B (s':=s')).
+- move=>? H1 ? H2 ?? H ?.
+  by rewrite (H1 _ _ (fun v => H v \o (@or_introl _ _))) (H2 _ _ (fun v => H v \o (@or_intror _ _))).
+- move=>? H1 ? H2 ?? H ?.
+  by rewrite (H1 _ _ (fun v => H v \o (@or_introl _ _))) (H2 _ _ (fun v => H v \o (@or_intror _ _))).
+- move=>? H1 ? H2 ?? H ?; do 2![apply/ex_iff=>?].
+  by rewrite (H1 _ _ (fun v => H v \o (@or_introl _ _))) (H2 _ _ (fun v => H v \o (@or_intror _ _))).
+- move=>? H1 ? H2 ?? H ?; apply/all_iff=>?.
+  by rewrite (H1 _ _ (fun v => H v \o (@or_introl _ _))) (H2 _ _ (fun v => H v \o (@or_intror _ _))).
+- by move=>? H1 ?? H ?; rewrite (H1 _ _ H).
+- by move=>???? H ?; rewrite (prop1_E (agrees_app1 H)) (prop1_E (agrees_app2 H)).
+by move=>? H1 ?? H ?; apply/ex_iff=>x; rewrite H1; last by move=>??; apply/H; exists x.
 Qed.
 
 Lemma prop1_As :
   forall J s s' (A: forall v (FV: fvAs J v), s v = s' v) h l1 l2,
     sat (s, h) (envs J l1 l2) <-> sat (s', h) (envs J l1 l2).
 Proof.
-  unfold envs; ins; apply prop1_A; ins.
-  eapply A; eapply fvA_istar in FV; des; clarify.
-  eapply in_map_iff in FV0; des; vauto.
+rewrite /envs=>??? H ???; apply/prop1_A=>? H2.
+apply/H; move: H2; rewrite fvA_istar; case=>? [H2 /in_map_iff [x [H3 _]]].
+by exists x; rewrite H3.
 Qed.
 
 Corollary prop1_AsE :
@@ -307,17 +333,17 @@ Corollary prop1_AsE :
     (A: forall v (FV: fvAs J v), s v = s' v),
   sat (s',h) (envs J l1 l2).
 Proof.
-  intros; eapply prop1_As, SAT; symmetry; eauto.
+by move=>?????? H H2; rewrite -prop1_As; last by apply: H2.
 Qed.
 
 Corollary prop1_A2 :
   forall x P (NIN: ~ fvA P x) s v h, sat (upd s x v, h) P <-> sat (s, h) P.
-Proof. ins; apply prop1_A; unfold upd; ins; desf. Qed.
+Proof. by move=>?? H ???; apply/prop1_A=>?; rewrite /upd; case: eqP=>// ->. Qed.
 
 Corollary prop1_As2 :
   forall x J (NIN: ~ fvAs J x) s v h l l',
   sat (upd s x v, h) (envs J l l') <-> sat (s, h) (envs J l l').
-Proof. ins; apply prop1_As; unfold upd; ins; desf. Qed.
+Proof. by move=>?? H ?????; apply/prop1_As=>?; rewrite /upd; case: eqP=>// ->. Qed.
 
 (** 2. Safety is monotone with respect to the step number (Proposition 3 in paper). *)
 
@@ -325,10 +351,10 @@ Lemma safe_mon :
   forall n C s h J Q (OK: safe n C s h J Q) m (LEQ: m <= n),
     safe m C s h J Q.
 Proof.
-  intros until m; revert C s n h OK; induction m; ins; unnw.
-  destruct n; [exfalso; omega|apply le_S_n in LEQ].
-  clarify; simpls; des; repeat split; ins.
-  exploit SOK; eauto; ins; des; eauto 10.
+move=>n C s h ?? H m; elim: m C s n h H=>// m IH ?? n ?; case: n=>// n; rewrite ltnS=>H Hl.
+rewrite /= in H *; move: H; do![case=>?]; move=>H; do!split=>//; move=>???? STEP SAT D1 D2 D3.
+move: (H _ _ _ _ STEP SAT D1 D2 D3); move=>[hJ1][hF1][?][?][?][?][?]?; exists hJ1, hF1; do!split=>//.
+by apply/IH; last by apply: Hl.
 Qed.
 
 (** 3. Safety depends only on the values of the free variables of the program, the
@@ -339,14 +365,14 @@ this property, we need the following auxiliary lemmas.
 Lemma agrees_upd :
   forall A s s' y (EQs: s y = s' y) x x' (EQx: x = x') v v' (EQv: v = v'),
     upd (A:=A) s x v' y = upd s' x' v' y.
-Proof. unfold upd; ins; desf. Qed.
+Proof. by rewrite /upd=> ???? -> ?? ->. Qed.
 
 Lemma red_agrees :
   forall c ss c' ss' (STEP: red c ss c' ss')
-    X s (A: forall x, X x -> fst ss x = s x)
-        (S_FV: forall x, In x (fvC c) -> X x),
-    exists s' h', red c (s, snd ss) c' (s', h')
-      /\ (forall x, X x -> fst ss' x = s' x) /\ snd ss' = h'.
+    X s (A: forall x, X x -> ss.1 x = s x)
+        (S_FV: forall x, x \in (fvC c) -> X x),
+    exists s' h', red c (s, ss.2) c' (s', h')
+      /\ (forall x, X x -> ss'.1 x = s' x) /\ ss'.2 = h'.
 Proof.
   induction 1; ins; clarify; simpls; eauto using red;
   try (rewrite (prop1_B (s' := s)) in B; try by red; eauto using in_or_app);
