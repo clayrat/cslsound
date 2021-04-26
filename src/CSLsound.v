@@ -374,39 +374,94 @@ Lemma red_agrees :
     exists s' h', red c (s, ss.2) c' (s', h')
       /\ (forall x, X x -> ss'.1 x = s' x) /\ ss'.2 = h'.
 Proof.
-  induction 1; ins; clarify; simpls; eauto using red;
-  try (rewrite (prop1_B (s' := s)) in B; try by red; eauto using in_or_app);
-  eauto 8 using red;
-  try (by exploit IHSTEP; eauto; intro; des; clarify; eauto 8 using red, in_or_app).
-
-  - do 3 eexists; [|split]; eauto using red.
-    intros; rewrite (prop1_E (s' := s0)); try red; eauto.
-    unfold upd; desf; auto.
-
-  - rewrite (prop1_E (s' := s0)) in RD; try red; eauto.
-    eauto 12 using red, prop1_E, agrees_upd.
-
-  - do 3 eexists; [|split]; eauto using red.
-    f_equal; [|f_equal]; eapply prop1_E; red; eauto using in_or_app.
-
-  - do 3 eexists; [|split];
-      eauto using red, agrees_upd, prop1_E.
-    f_equal; f_equal; eapply prop1_E; red; eauto.
-
-  - do 3 eexists; [|split];
-      eauto using red, prop1_E.
-    f_equal; eapply prop1_E; red; eauto.
+move=>????; elim=>//=.
+  (* red_Seq1 *)
+- by move=>? [? h] ? s ??; exists s, h; do!split=>//; constructor.
+  (* red_Seq2 *)
+- move=>?????? H ?? H2 H3.
+  case: (H _ _ H2); first by move=>??; apply/H3; rewrite mem_cat; apply/orP; left.
+  by move=>s1[h1][?][?]?; exists s1, h1; do!split=>//; constructor.
+  (* red_If1 *)
+- move=>??? [a h] /= ?? s H H2; exists s, h; do!split=>//; constructor=>/=.
+  by rewrite (prop1_B (s':=a)) //; apply/agreesC=>??; apply/H/H2; rewrite mem_cat; apply/orP; left.
+  (* red_If2 *)
+- move=>??? [a h] /= ?? s H H2; exists s, h; do!split=>//; constructor=>/=.
+  by rewrite (prop1_B (s':=a)) //; apply/agreesC=>??; apply/H/H2; rewrite mem_cat; apply/orP; left.
+  (* red_Par1 *)
+- move=>?????? H ??? H2 H3.
+  case: (H _ _ H2); first by move=>??; apply/H3; rewrite mem_cat; apply/orP; left.
+  by move=>s1[h1][?][?]?; exists s1, h1; do!split=>//; constructor.
+  (* red_Par2 *)
+- move=>?????? H ??? H2 H3.
+  case: (H _ _ H2); first by move=>??; apply/H3; rewrite mem_cat; apply/orP; right.
+  by move=>s1[h1][?][?]?; exists s1, h1; do!split=>//; constructor.
+  (* red_Par3 *)
+- by move=>[? h] ? s ??; exists s, h; do!split=>//; constructor.
+  (* red_Loop *)
+- by move=>?? [? h] ? s ??; exists s, h; do!split=>//; constructor.
+  (* red_Res1 *)
+- move=>?????? H ?? H2 H3.
+  by case: (H _ _ H2 H3)=>s1[h1][?][?]?; exists s1, h1; do!split=>//; constructor.
+  (* red_Res2 *)
+- by move=>? [? h] ? s ??; exists s, h; do!split=>//; constructor.
+  (* red_With1 *)
+- move=>??? [a h] /= ?? s H H2; exists s, h; do!split=>//; constructor=>/=.
+  by rewrite (prop1_B (s':=a)) //; apply/agreesC=>??; apply/H/H2; rewrite mem_cat; apply/orP; left.
+  (* red_With2 *)
+- move=>?????? H ??? H2 H3.
+  by case: (H _ _ H2 H3)=>s1[h1][?][?]?; exists s1, h1; do!split=>//; constructor.
+  (* red_With3 *)
+- by move=>? [? h] ? s ??; exists s, h; do!split=>//; constructor.
+  (* red_Assign *)
+- move=>x e ?? s0 h ->-> ? s /= H1 H2; exists (upd s x (edenot e s)), h; do!split=>//=; first by apply: red_Assign.
+  move=>??; rewrite (prop1_E (s':=s)); first by rewrite /upd; case: eqP=>//; rewrite H1.
+  by apply/(agrees_tl (X:=x))=>??; apply/H1/H2.
+  (* red_Read *)
+- move=>x ??? s0 h v -> H -> ? s /= H1 H2; exists (upd s x v), h; do!split=>//.
+  - by apply: red_Read=>//; rewrite -H (prop1_E (s':=s)) //; apply/(agrees_tl (X:=x))=>??; apply/H1/H2.
+  by move=>??; rewrite /upd; case: eqP =>//; rewrite H1.
+  (* red_Write *)
+- move=>e1 e2 ?? s0 h ->-> ? s /= H1 H2; exists s, (upd h (edenot e1 s) (Some (edenot e2 s))); do!split=>//; first by apply: red_Write.
+  by rewrite !(prop1_E (s':=s)) // =>??; apply/H1/H2; rewrite mem_cat; apply/orP; [right|left].
+  (* red_Alloc *)
+- move=>x e ?? s0 h v -> H -> ? s /= H1 H2; exists (upd s x v), (upd h v (Some (edenot e s))); do!split=>//; first by apply: red_Alloc=>//.
+  - by move=>y Hy; rewrite /upd; case: eqP=>//; rewrite H1.
+  by rewrite (prop1_E (s':=s)) //; apply/(agrees_tl (X:=x))=>??; apply/H1/H2.
+(* red_Free *)
+move=>e ?? s0 h ->-> ? s /= H1 H2; exists s, (upd h (edenot e s) None); do!split=>//; first by apply: red_Free.
+by rewrite (prop1_E (s':=s)) // =>??; apply/H1/H2.
 Qed.
 
 Lemma aborts_agrees :
   forall c ss (ABORT: aborts c ss)
-    s' (A: agrees (fvC c) (fst ss) s') h' (EQ: snd ss = h'),
+    s' (A: agrees (fvC c) ss.1 s') h' (EQ: ss.2 = h'),
     aborts c (s', h').
 Proof.
-  induction 1; ins; clarify; eauto using aborts; fold stack in *; fold heap in *;
-  try erewrite prop1_E in *; eauto using aborts, agrees_tl, agrees_app1, agrees_app2.
-  by rewrite (accesses_agrees (agrees_app1 A)), (writes_agrees (agrees_app2 A)) in *; vauto.
-  by rewrite (accesses_agrees (agrees_app2 A)), (writes_agrees (agrees_app1 A)) in *; vauto.
+move=>??; elim=>/=.
+(* aborts_Seq *)
+- by move=>???? H1 ? H2 ??; constructor; apply/H1=>//; apply/(agrees_app1 H2).
+(* aborts_Par1 *)
+- by move=>???? H1 ? H2 ??; constructor; apply/H1=>//; apply/(agrees_app1 H2).
+(* aborts_Par2 *)
+- by move=>???? H1 ? H2 ??; constructor; apply/H1=>//; apply/(agrees_app2 H2).
+(* aborts_Race1 *)
+- move=>?? ss ?? H ??; apply: aborts_Race1=>/=.
+  by rewrite (accesses_agrees (s':=ss.1)) ?(writes_agrees (s':=ss.1)) //;
+  apply/agreesC; [apply/(agrees_app2 H)|apply/(agrees_app1 H)].
+(* aborts_Race2 *)
+- move=>?? ss ?? H ??; apply: aborts_Race2=>/=.
+  by rewrite (accesses_agrees (s':=ss.1)) ?(writes_agrees (s':=ss.1)) //;
+  apply/agreesC; [apply/(agrees_app1 H)|apply/(agrees_app2 H)].
+(* aborts_Res *)
+- by move=>???? H1 ? H2 ??; constructor; apply/H1=>//; apply/(agrees_app1 H2).
+(* aborts_Atom *)
+- by move=>???? H1 ? H2 ??; constructor; apply/H1=>//; apply/(agrees_app1 H2).
+(* aborts_Read *)
+- by move=>?? ss ?? H ? <-; apply: aborts_Read=>/=; rewrite (prop1_E (s':=ss.1)) //; apply/agreesC/(agrees_tl H).
+(* aborts_Write *)
+- by move=>?? ss ?? H2 ? <-; constructor=>/=; rewrite (prop1_E (s':=ss.1)) //; apply/agreesC/(agrees_app1 H2).
+(* aborts_Free *)
+by move=>? ss ???? <-; constructor=>/=; rewrite (prop1_E (s':=ss.1)) //; apply/agreesC.
 Qed.
 
 (** With these lemmas, we can show Proposition 4. *)
