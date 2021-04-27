@@ -8,6 +8,42 @@ Unset Strict Implicit.
 Axiom fext : forall A (B : A -> Type) (f1 f2 : forall x, B x),
                (forall x, f1 x = f2 x) -> f1 = f2.
 
+Ltac exploit x :=
+    refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _ _) _)
+ || refine ((fun x y => y x) (x _ _ _) _)
+ || refine ((fun x y => y x) (x _ _) _)
+ || refine ((fun x y => y x) (x _) _).
+
 (** ** Miscellaneous useful lemmas *)
 
 Lemma ex_iff : forall A p q (EQ: forall x : A, p x <-> q x),

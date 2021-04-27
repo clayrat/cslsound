@@ -208,7 +208,7 @@ Fixpoint safe (n : nat) (c: cmd) (s: stack) (h: heap) (gamma : rname -> option a
 (* Condition (ii) NAB *)
        /\ (forall hF (D: hdef h hF) (ABORT: aborts c (s, hplus h hF)), False)
 (* Condition (iii) AOK *)
-       /\ (forall a (ACC: In a (accesses c s)), h a <> None)
+       /\ (forall a (ACC: a \in (accesses c s)), h a <> None)
 (* Condition (iv) SOK *)
        /\ (forall hJ hF c' ss'
              (STEP: red c (s, hplus h (hplus hJ hF)) c' ss')
@@ -353,7 +353,7 @@ Lemma safe_mon :
 Proof.
 move=>n C s h ?? H m; elim: m C s n h H=>// m IH ?? n ?; case: n=>// n; rewrite ltnS=>H Hl.
 rewrite /= in H *; move: H; do![case=>?]; move=>H; do!split=>//; move=>???? STEP SAT D1 D2 D3.
-move: (H _ _ _ _ STEP SAT D1 D2 D3); move=>[hJ1][hF1][?][?][?][?][?]?; exists hJ1, hF1; do!split=>//.
+move: (H _ _ _ _ STEP SAT D1 D2 D3); move=>[hJ1][hF1]; do!(case=>?); move=>?; exists hJ1, hF1; do!split=>//.
 by apply/IH; last by apply: Hl.
 Qed.
 
@@ -468,21 +468,24 @@ Qed.
 
 Lemma safe_agrees :
   forall n C s h J Q (OK: safe n C s h J Q) s'
-    (A: forall v, In v (fvC C) \/ fvA Q v \/ fvAs J v -> s v = s' v),
+    (A: forall v, v \in fvC C \/ fvA Q v \/ fvAs J v -> s v = s' v),
     safe n C s' h J Q.
 Proof.
-  induction n; inss.
-  by apply -> prop1_A; eauto.
-  by eapply NAB, aborts_agrees; eauto; red; symmetry; eauto.
-  by eapply AOK; eauto; erewrite accesses_agrees; unfold agrees; eauto.
-
-  exploit prop2; eauto; intro M; des; simpls; clarify.
-  exploit red_agrees; try apply STEP; [symmetry; eapply A, X|by left|].
-  clear STEP; intros (s'0 & _ & STEP & A' & <-).
-  exploit SOK; eauto; [by eapply prop1_As, SAT; ins; eauto| ins; des].
-  clarify; repeat eexists; eauto.
-  by eapply prop1_As; try eassumption; eauto.
-  eapply IHn; eauto; symmetry; eapply A'; des; auto.
+elim=>// n IH ????? /= [H1][H2][H3]H4 s1 H; do!split.
+- by move/H1=>?; apply/prop1_A; first by move=>??; apply/esym/H; right; left.
+- by move=>?? H0; apply/H2=>//; apply/(aborts_agrees H0) =>//= ??; apply/esym/H; left.
+- by move=>a Ha; apply/H3; rewrite (accesses_agrees (s':=s1)) // /agrees =>??; apply/H; left.
+move=>???? Hr Hs Hd1 Hd2 Hd3; move: (prop2 Hr)=>[M1][M2][M3]M.
+exploit (red_agrees Hr).
+- by move=>? Hx /=; apply/esym/H; exact: Hx.
+- by move=>?? /=; left.
+move=>[s0][h0][Hr2][H5]EQ; rewrite -{}EQ /= in Hr2.
+exploit (H4 _ _ _ _ Hr2)=>//.
+- by apply/prop1_As; first by move=>??; apply/H; right; right.
+move=>[h2][hJ2]; do!(case=>/= ?); move=>b; exists h2, hJ2; do!split=>//.
+- by apply/prop1_As; first by move=>??; apply/H5; right; right.
+apply/IH; first by exact: b.
+by move=>? Hx; apply/esym/H5; case: Hx; [move/(M1 _); left | right].
 Qed.
 
 
@@ -492,16 +495,16 @@ Qed.
 
 (** We now show the soundness of each proof rule of CSL separately. *)
 
+Section SoundnessRules.
+
 Definition disjoint A (X Y: A -> Prop) := forall x, X x -> Y x -> False.
 
-Definition pred_of_list A (l: list A) (x: A) := In x l.
-
-Coercion pred_of_list : list >-> Funclass.
+Definition pr {A : eqType} (l: list A) (x: A) : Prop := x \in l.
 
 Lemma disjoint_conv :
-  forall A (l1 l2 : list A), disjoint l1 l2 -> Basic.disjoint l1 l2.
+  forall {A : eqType} (l1 l2 : list A), disjoint (pr l1) (pr l2) -> Basic.disjoint l1 l2.
 Proof.
-  done.
+by move=>??? H; apply/hasP; case=>x ??; apply/(H x).
 Qed.
 
 (** *** Skip *)
@@ -509,12 +512,16 @@ Qed.
 Lemma safe_skip :
   forall n s h J Q, sat (s,h) Q -> safe n Cskip s h J Q.
 Proof.
-  by induction n; inss; [inv ABORT |inv STEP].
+elim=>//= *; do!split=>//.
+- by move=>??; case EQ : _ _ /.
+by move=>>; case EQ : _ _ _ _/.
 Qed.
-Hint Resolve safe_skip.
+Hint Resolve safe_skip : core.
 
 Theorem rule_skip J P : CSL J P Cskip P.
-Proof. by split; auto. Qed.
+Proof.
+by split=>// *; apply: safe_skip.
+Qed.
 
 (** *** Parallel composition *)
 
@@ -523,31 +530,46 @@ Lemma safe_par:
    C2 h2 Q2 (OK2: safe n C2 s h2 J Q2)
    (WF: wf_cmd (Cpar C1 C2))
    (HD: hdef h1 h2)
-   (FV1: disjoint (fvC C1) (wrC C2))
-   (FV2: disjoint (fvA Q1) (wrC C2))
-   (FV3: disjoint (fvAs J) (wrC C2))
-   (FV4: disjoint (fvC C2) (wrC C1))
-   (FV5: disjoint (fvA Q2) (wrC C1))
-   (FV6: disjoint (fvAs J) (wrC C1)),
+   (FV1: disjoint (pr (fvC C1)) (pr (wrC C2)))
+   (FV2: disjoint     (fvA Q1)  (pr (wrC C2)))
+   (FV3: disjoint     (fvAs J)  (pr (wrC C2)))
+   (FV4: disjoint (pr (fvC C2)) (pr (wrC C1)))
+   (FV5: disjoint     (fvA Q2)  (pr (wrC C1)))
+   (FV6: disjoint     (fvAs J)  (pr (wrC C1))),
   safe n (Cpar C1 C2) s (hplus h1 h2) J (Astar Q1 Q2).
 Proof.
-  induction n; inss.
-  {  (* No aborts *)
+elim=>//= ? IH ? ? h1 ?? [?][AB1][AC1] H1 ? h2 ? [?][AB2][AC2] H2 ? HD ? ?????; do!split=>//.
+- move=>hF; rewrite hdef_hplus hplusA; case=>HD1 HD2 HH.
+  (* TODO ssreflect's `case _ /` doesn't handle inversion with 2+ indices *)
+  (* this requires extra boilerplate in the form of _spec lemma *)
+  inversion HH.
+  (* No aborts *)
+  - by apply/AB1; last by [exact:A]; rewrite hdef_hplus2.
+  - by rewrite hplusAC in A; last by [apply/hdefC];
+    apply:AB2; last by [apply:A]; rewrite hdef_hplus2; split=>//; apply/hdefC.
+  (* No races *)
+  - apply/ND/disjoint_conv=>/= x; rewrite /pr; case: (HD x)=>HN ??.
+    - by apply/AC1; last by [exact: HN].
+    by apply/AC2; last by [exact: HN]; apply/writes_accesses.
+  - apply/ND/disjoint_conv=>/= x; rewrite /pr; case: (HD x)=>HN ??.
+    - by apply/AC1; last by [exact: HN]; apply/writes_accesses.
+    by apply/AC2; last by [exact: HN].
+- (* accesses *)
+  move=>x; rewrite mem_cat=>/orP; case.
+  - by move/AC1; rewrite /hplus; case: (h1 x).
+  - by move/AC2; rewrite hplusC /hplus; last by [apply/hdefC]; case: (h2 x).
+(* Step *)
+move=>? hF ??; rewrite !hdef_hplus hplusA=>ST HS[?]?[?]??.
+inversion ST.
+(* C1 does a step *)
+- rewrite -H5 /= envs_app1 // in HS.
+  rewrite (hplusAC hF) in R; last by apply/hdefC.
+  exploit H1; first by [exact: R]; try by [].
+  - by rewrite hdef_hplus2.
+  - by rewrite hdef_hplus2; split=>//; apply/hdefC.
+  move=>[h'][hJ'][?][?][?][?][?]?.
+  exists (hplus h' h2), hJ'.
 
-    rewrite hdef_hplus, hplusA in *; des; inv ABORT; eauto.
-    by rewrite hplusAC in A; [eapply NAB, A|]; eauto.
-    (* No races *)
-    by destruct ND; eapply disjoint_conv; unfold disjoint, pred_of_list;
-       intro y; destruct (HD y); intros; eauto using writes_accesses.
-    by destruct ND; eapply disjoint_conv; unfold disjoint, pred_of_list;
-       intro y; destruct (HD y); intros; eauto using writes_accesses.
-  }
-  { (* accesses *)
-    by eapply in_app_iff in ACC; unfold hplus in *; desf; eauto.
-  }
-  { (* Step *)
-  rewrite hdef_hplus, hplusA in *; des.
-  inv STEP; simpls.
   - (* C1 does a step *)
     rewrite envs_app1 in *; auto.
     rewrite (hplusAC hF) in R; auto.

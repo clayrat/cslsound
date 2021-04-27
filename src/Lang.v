@@ -249,21 +249,21 @@ Inductive aborts : cmd -> state -> Prop :=
 | aborts_Par1: forall c1 c2 ss (A: aborts c1 ss), aborts (Cpar c1 c2) ss
 | aborts_Par2: forall c1 c2 ss (A: aborts c2 ss), aborts (Cpar c1 c2) ss
 | aborts_Race1: forall c1 c2 ss
-    (ND: ~ disjoint (accesses c1 (fst ss)) (writes c2 (fst ss))),
+    (ND: ~ disjoint (accesses c1 ss.1) (writes c2 ss.1)),
     aborts (Cpar c1 c2) ss
 | aborts_Race2: forall c1 c2 ss
-    (ND: ~ disjoint (writes c1 (fst ss)) (accesses c2 (fst ss))),
+    (ND: ~ disjoint (writes c1 ss.1) (accesses c2 ss.1)),
     aborts (Cpar c1 c2) ss
 | aborts_Res: forall r c ss (A: aborts c ss), aborts (Cresource r c) ss
 | aborts_Atom: forall r c ss (A: aborts c ss), aborts (Cinwith r c) ss
 | aborts_Read: forall x e ss
-    (NIN: snd ss (edenot e (fst ss)) = None),
+    (NIN: snd ss (edenot e ss.1) = None),
     aborts (Cread x e) ss
 | aborts_Write: forall e1 e2 ss
-    (NIN: snd ss (edenot e1 (fst ss)) = None),
+    (NIN: snd ss (edenot e1 ss.1) = None),
     aborts (Cwrite e1 e2) ss
 | aborts_Free: forall e ss
-    (NIN: snd ss (edenot e (fst ss)) = None),
+    (NIN: snd ss (edenot e ss.1) = None),
     aborts (Cdispose e) ss.
 
 (** ** Well-formed commands *)
