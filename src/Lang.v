@@ -282,7 +282,7 @@ Fixpoint wf_cmd c :=
     | Calloc x e    => true
     | Cdispose e    => true
     | Cseq c1 c2    => wf_cmd c1 && wf_cmd c2
-    | Cpar c1 c2    => wf_cmd c1 && wf_cmd c2 && disjoint (locked c1) (locked c2)
+    | Cpar c1 c2    => [&& wf_cmd c1, wf_cmd c2 & disjoint (locked c1) (locked c2)]
     | Cif b c1 c2   => user_cmd c1 && user_cmd c2
     | Cwhile b c    => user_cmd c
     | Cresource r c => wf_cmd c
@@ -337,8 +337,8 @@ move=>c ss c' ss'; elim=>//=.
 - by move=>????? _ H /andP [/H->->].
 - by move=>???? _ /andP [/user_cmd_wf].
 - by move=>???? _ /andP [_ /user_cmd_wf].
-- by move=>????? _ H -> /andP [/andP [/H->]->].
-- by move=>????? _ H -> /andP [/andP [->] /H->].
+- by move=>????? _ H -> /and3P [/H->->].
+- by move=>????? _ H -> /and3P [->/H->].
 - by move=>???->.
 - by move=>????? u; rewrite (user_cmd_wf u); move/eqP: (user_cmd_locked u)=>->.
 by move=>????? _ H -> /andP [/H ->].
@@ -349,7 +349,7 @@ Lemma disjoint_locked :
 Proof.
 elim=>//=.
 - by move=>? H1 ?? /andP [/H1].
-- by move=>? H1 ? H2 /andP [/andP [/H1 u1] /H2 u2]; rewrite cat_uniq u1 u2 /disjoint =>->.
+- by move=>? H1 ? H2 /and3P [/H1 u1 /H2 u2]; rewrite cat_uniq u1 u2 /disjoint =>->.
 - by move=>?? H /H; apply: filter_uniq.
 by move=>r c H /andP [/H ->] ->.
 Qed.
