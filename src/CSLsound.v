@@ -1,6 +1,6 @@
 From Coq Require Import ssreflect ssrbool ssrfun List.
-From mathcomp Require Import ssrnat ssrint  eqtype seq path.
-From cslsound Require Import (*HahnBase ZArith List*) Basic Lang.
+From mathcomp Require Import ssrnat ssrint eqtype seq path.
+From cslsound Require Import Basic Lang.
 
 Set Implicit Arguments.
 Unset Strict Implicit.
@@ -538,20 +538,16 @@ Lemma safe_par:
    (FV6: disjoint     (fvAs J)  (pr (wrC C1))),
   safe n (Cpar C1 C2) s (hplus h1 h2) J (Astar Q1 Q2).
 Proof.
-elim=>//= ? IH C1 s h1 ?? [?][AB1][AC1] H1 C2 h2 ? [?][AB2][AC2] H2 /and3P [WF1 WF2 DJ] HD FV1 ?? FV4 FV5 FV6; do!split=>//.
-- move=>hF; rewrite hdef_hplus hplusA; case=>HD1 HD2 HH.
+elim=>//= ? IH C1 s h1 ?? [S1][AB1][AC1] H1 C2 h2 ? [S2][AB2][AC2] H2 /and3P [???] HD FV1 FV2 FV3 FV4 FV5 FV6; do!split=>//.
+- move=>hF; rewrite hdef_hplus hplusA; case=>?? HH.
   case : {-2}_ {-2}_ /HH (erefl (Cpar C1 C2)) (erefl (s, hplus h1 (hplus h2 hF)))=>//??? A; case=>E1 E2 EQ; rewrite ?E1 ?E2 EQ in A.
   (* No aborts *)
   - by apply/AB1; last by [exact:A]; rewrite hdef_hplus2.
   - by rewrite hplusAC in A; last by [apply/hdefC];
-    apply:AB2; last by [apply:A]; rewrite hdef_hplus2; split=>//; apply/hdefC.
+       apply/AB2; last by [exact:A]; rewrite hdef_hplus2; split=>//; apply/hdefC.
   (* No races *)
-  - apply/A/disjoint_conv=>/= x; rewrite /pr; case: (HD x)=>HN ??.
-    - by apply/AC1; last by [exact: HN].
-    by apply/AC2; last by [exact: HN]; apply/writes_accesses.
-  - apply/A/disjoint_conv=>/= x; rewrite /pr; case: (HD x)=>HN ??.
-    - by apply/AC1; last by [exact: HN]; apply/writes_accesses.
-    by apply/AC2; last by [exact: HN].
+  - 1,2: apply/A/disjoint_conv=>/= x; rewrite /pr; case: (HD x)=>HN ??; [apply/AC1|apply/AC2]; try by [exact: HN].
+    1-4: by [|apply/writes_accesses|apply/writes_accesses|].
 - (* accesses *)
   move=>x; rewrite mem_cat=>/orP; case.
   - by move/AC1; rewrite /hplus; case: (h1 x).
@@ -563,64 +559,65 @@ case : {-2}_ {-2}_ {-1}_ {-1}_ /ST (erefl (Cpar C1 C2)) (erefl (s, hplus h1 (hpl
 - move=>????? A DI; case=>E1 E2 EQ E3 _; rewrite E1 EQ in A; rewrite E2 in DI.
   rewrite E3 /= E2 envs_app1 // in HS.
   rewrite (hplusAC hF) in A; last by apply/hdefC.
-  exploit H1; first by [exact: A]; try by [].
-  - by rewrite hdef_hplus2.
-  - by rewrite hdef_hplus2; split=>//; apply/hdefC.
-  move=>[h'][hJ']; rewrite !hdef_hplus2; case=>[H11][H12][[H13 H14]][[H15 H16]][?]?.
+  exploit H1; first by [exact: A]; try by [|rewrite hdef_hplus2; split=>//; apply/hdefC].
+  move=>[h'][hJ']; rewrite !hdef_hplus2; case=>[->][?][[??]][[??]][?]?.
   exists (hplus h' h2), hJ'; do!split=>//=.
-  - by rewrite H11 hplusA [hplus hJ' _]hplusAC //; apply/hdefC.
+  - by rewrite hplusA [hplus hJ' _]hplusAC //; apply/hdefC.
   - by rewrite hdef_hplus; split=>//; apply/hdefC.
   - by rewrite hdef_hplus; split=>//; apply/hdefC.
   - by rewrite E2 envs_app1.
-  move: (prop2 A)=>[B1][B2][B3]B4.
+  move: (prop2 A)=>[B1][B2][_] /= B3.
   apply/IH; rewrite ?E2 //; first last.
-  - by move=>? Hx ?; apply/FV6; first by [exact: Hx]; apply/B2.
-  - by move=>? Hx ?; apply/FV5; first by [exact: Hx]; apply/B2.
-  - by move=>? Hx ?; apply/FV4; first by [exact: Hx]; apply/B2.
-  - by move=>?? Hx; apply/FV1; last by [exact: Hx]; apply/B1.
+  - by move=>? Hx ?; apply/FV6; [exact: Hx|apply/B2].
+  - by move=>? Hx ?; apply/FV5; [exact: Hx|apply/B2].
+  - by move=>? Hx ?; apply/FV4; [exact: Hx|apply/B2].
+  - by move=>??  Hx; apply/FV1; [apply/B1|exact: Hx].
   - by apply/and3P; split=>//; apply/red_wf_cmd; first by exact:A.
-  apply/(safe_agrees (s:=s)).
-
-  - (* C1 does a step *)
-    rewrite envs_app1 in *; auto.
-    rewrite (hplusAC hF) in R; auto.
-    exploit SOK0; eauto; intro M; des.
-    rewrite hdef_hplus2 in *; des.
-    exists (hplus h' h2), hJ'; repeat eexists; eauto.
-      by rewrite M, hplusA; f_equal; rewrite hplusAC; auto.
-    destruct (prop2 R) as (B1 & B2 & B3).
-    eapply IHn; repeat split; eauto using red_wf_cmd;
-      try (by unfold disjoint, pred_of_list in *; ins; eauto 3).
-    apply safe_agrees with s; [by eapply safe_mon, le_n_Sn|].
-    by symmetry; apply B3; unfold disjoint in *; des; eauto.
-  - (* C2 does a step *)
-    rewrite envs_app2 in *; auto.
-    rewrite (hplusAC (hplus hJ hF)) in R; auto.
-    rewrite (hplusAC hF) in R; auto.
-    exploit SOK; eauto; intro M; des.
-    rewrite hdef_hplus2 in *; des.
-    exists (hplus h1 h'), hJ'; repeat eexists; eauto.
-      rewrite (@hplusC h' h1); auto.
-      by rewrite M, hplusA; f_equal; rewrite hplusAC; auto.
-    destruct (prop2 R) as (B1 & B2 & B3).
-    eapply IHn; repeat split; eauto using red_wf_cmd;
-      try (by unfold disjoint, pred_of_list in *; ins; eauto 3).
-    apply safe_agrees with s; [by eapply safe_mon, le_n_Sn|].
-    by symmetry; apply B3; unfold disjoint in *; des; eauto.
-  - (* Par skip skip *)
-    exists (hplus h1 h2), hJ; rewrite hplusA; repeat split; eauto.
-    eapply safe_skip; repeat eexists; eauto.
-  }
+  apply/(safe_agrees (s:=s)); first by apply/safe_mon; last by exact: leqnSn.
+  by move=>? Hv; apply/esym/B3; case: Hv; [|case] => [/FV4|/FV5|/FV6] /negP.
+(* C2 does a step *)
+- move=>????? A DI; case=>E1 E2 EQ E3 _; rewrite E2 EQ in A; rewrite E1 in DI.
+  rewrite E3 /= E1 envs_app2 // in HS.
+  rewrite (hplusAC (hplus hJ hF)) in A; last by apply/hdefC.
+  rewrite (hplusAC hF) in A; last by apply/hdefC.
+  exploit H2; first by [exact: A]; try by [|rewrite hdef_hplus2; split=>//; apply/hdefC].
+  move=>[h'][hJ']; rewrite !hdef_hplus2; case=>[->][?][[??]][[??]][?]?.
+  exists (hplus h1 h'), hJ'; do!split=>//=.
+  - by rewrite hplusA [hplus hJ' _]hplusAC 1?hplusAC //; apply/hdefC.
+  - by rewrite hdef_hplus; split=>//; apply/hdefC.
+  - by rewrite hdef_hplus; split=>//; apply/hdefC.
+  - by rewrite E1 envs_app2.
+  move: (prop2 A)=>[B1][B2][_] /= B3.
+  apply/IH; rewrite ?E1 //; first last.
+  - by move=>??  Hx; apply/FV4; [apply/B1|exact: Hx].
+  - by move=>? Hx ?; apply/FV3; [exact: Hx|apply/B2].
+  - by move=>? Hx ?; apply/FV2; [exact: Hx|apply/B2].
+  - by move=>? Hx ?; apply/FV1; [exact: Hx|apply/B2].
+  - by apply/hdefC.
+  - by apply/and3P; split=>//; apply/red_wf_cmd; first by exact: A.
+  apply/(safe_agrees (s:=s)); first by apply/safe_mon; last by exact: leqnSn.
+  by move=>? Hv; apply/esym/B3; case: Hv; [|case] => [/FV1|/FV2|/FV3] /negP.
+(* Par skip skip *)
+- move=>?; case=>EQ1 EQ2 -> EQ _; rewrite EQ /= in HS; rewrite -EQ1 -EQ2 in S1 S2 *.
+  exists (hplus h1 h2), hJ; rewrite hplusA /=; do!split=>//.
+  - by rewrite hdef_hplus.
+  - by rewrite hdef_hplus.
+  by apply/safe_skip=>/=; exists h1, h2; do!split=>//; [apply/S1|apply/S2].
 Qed.
 
 Theorem rule_par J P1 P2 C1 C2 Q1 Q2 :
   CSL J P1 C1 Q1 -> CSL J P2 C2 Q2 ->
-  disjoint (fvC C1) (wrC C2) -> disjoint (fvA Q1) (wrC C2) -> disjoint (fvAs J) (wrC C2) ->
-  disjoint (fvC C2) (wrC C1) -> disjoint (fvA Q2) (wrC C1) -> disjoint (fvAs J) (wrC C1) ->
+  disjoint (pr (fvC C1)) (pr (wrC C2)) ->
+  disjoint     (fvA Q1)  (pr (wrC C2)) ->
+  disjoint     (fvAs J)  (pr (wrC C2)) ->
+  disjoint (pr (fvC C2)) (pr (wrC C1)) ->
+  disjoint     (fvA Q2)  (pr (wrC C1)) ->
+  disjoint     (fvAs J)  (pr (wrC C1)) ->
   CSL J (Astar P1 P2) (Cpar C1 C2) (Astar Q1 Q2).
 Proof.
-  unfold CSL; inss; eapply safe_par; simpl; auto.
-  rewrite !user_cmd_locked; simpls; auto.
+rewrite /CSL; move=>[?]H1[?]H2 ??????; split=>/=; first by apply/andP.
+move=>???[?][?][?][?][?]<-; apply/safe_par=>//=; [apply/H1|apply/H2|]=>//.
+by apply/and3P; rewrite !user_cmd_locked //; do!split=>//; apply/user_cmd_wf.
 Qed.
 
 (** *** Resource declaration *)

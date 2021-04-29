@@ -1,4 +1,3 @@
-(*Require Import HahnBase ZArith List.*)
 From Coq Require Import ssreflect ssrbool ssrfun.
 From mathcomp Require Import ssrnat ssrint eqtype seq path.
 

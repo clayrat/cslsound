@@ -2,8 +2,6 @@ From Coq Require Import ssreflect ssrbool ssrfun.
 From mathcomp Require Import ssrnat ssrint ssralg eqtype seq path.
 From cslsound Require Import Basic.
 
-(*Require Import HahnBase ZArith List Basic.*)
-
 Set Implicit Arguments.
 Unset Strict Implicit.
 
@@ -61,18 +59,18 @@ This restriction is captured by the following definition: *)
 Fixpoint user_cmd c :=
   match c with
     | Cskip         => true
-    | Cassign x E   => true
-    | Cread x E     => true
-    | Cwrite E E'   => true
-    | Calloc x E    => true
-    | Cdispose E    => true
+    | Cassign _ _   => true
+    | Cread _ _     => true
+    | Cwrite _ _    => true
+    | Calloc _ _    => true
+    | Cdispose _    => true
     | Cseq C1 C2    => user_cmd C1 && user_cmd C2
     | Cpar C1 C2    => user_cmd C1 && user_cmd C2
-    | Cif B C1 C2   => user_cmd C1 && user_cmd C2
-    | Cwhile B C    => user_cmd C
-    | Cresource r C => user_cmd C
-    | Cwith r B C   => user_cmd C
-    | Cinwith r C   => false
+    | Cif _ C1 C2   => user_cmd C1 && user_cmd C2
+    | Cwhile _ C    => user_cmd C
+    | Cresource _ C => user_cmd C
+    | Cwith _ _ C   => user_cmd C
+    | Cinwith _ _   => false
   end.
 
 (** The following function returns a list of locks that a command is
@@ -81,17 +79,17 @@ currently holding in some arbitrary fixed order. *)
 Fixpoint locked c :=
   match c with
     | Cskip         => nil
-    | Cassign x e   => nil
-    | Cread x e     => nil
-    | Cwrite e e'   => nil
-    | Calloc x e    => nil
-    | Cdispose e    => nil
-    | Cseq c1 c2    => locked c1
+    | Cassign _ _   => nil
+    | Cread _ _     => nil
+    | Cwrite _ _    => nil
+    | Calloc _ _    => nil
+    | Cdispose _    => nil
+    | Cseq c1 _     => locked c1
     | Cpar c1 c2    => locked c1 ++ locked c2
-    | Cif b c1 c2   => nil
-    | Cwhile b c    => nil
+    | Cif _ _ _     => nil
+    | Cwhile _ _    => nil
     | Cresource r c => filter (predC1 r) (locked c)
-    | Cwith r b c   => nil
+    | Cwith _ _ _   => nil
     | Cinwith r c   => r :: locked c
   end.
 
@@ -101,17 +99,17 @@ access to (either has acquired or may acquire in the future). *)
 Fixpoint locks c :=
   match c with
     | Cskip         => nil
-    | Cassign x e   => nil
-    | Cread x e     => nil
-    | Cwrite e e'   => nil
-    | Calloc x e    => nil
-    | Cdispose e    => nil
+    | Cassign _ _   => nil
+    | Cread _ _     => nil
+    | Cwrite _ _    => nil
+    | Calloc _ _    => nil
+    | Cdispose _    => nil
     | Cseq c1 c2    => locks c1 ++ locks c2
     | Cpar c1 c2    => locks c1 ++ locks c2
-    | Cif b c1 c2   => locks c1 ++ locks c2
-    | Cwhile b c    => locks c
+    | Cif _ c1 c2   => locks c1 ++ locks c2
+    | Cwhile _ c    => locks c
     | Cresource r c => filter (predC1 r) (locks c)
-    | Cwith r b c   => r :: locks c
+    | Cwith r _ c   => r :: locks c
     | Cinwith r c   => r :: locks c
   end.
 
@@ -207,36 +205,36 @@ Inductive red: cmd -> state -> cmd -> state -> Prop :=
 
 Fixpoint accesses c s :=
   match c with
-    | Cskip => nil
-    | (Cassign x e)   => nil
-    | (Cread x e)     => edenot e s :: nil
-    | (Cwrite e e')   => edenot e s :: nil
-    | (Calloc x e)    => nil
-    | (Cdispose e)    => edenot e s :: nil
-    | (Cseq c1 c2)    => accesses c1 s
-    | (Cpar c1 c2)    => accesses c1 s ++ accesses c2 s
-    | (Cif b c1 c2)   => nil
-    | (Cwhile b c)    => nil
-    | (Cresource r c) => accesses c s
-    | (Cwith r b c)   => nil
-    | (Cinwith r c)   => accesses c s
+    | Cskip         => nil
+    | Cassign _ _   => nil
+    | Cread _ e     => edenot e s :: nil
+    | Cwrite e _    => edenot e s :: nil
+    | Calloc _ _    => nil
+    | Cdispose e    => edenot e s :: nil
+    | Cseq c1 _     => accesses c1 s
+    | Cpar c1 c2    => accesses c1 s ++ accesses c2 s
+    | Cif _ _ _     => nil
+    | Cwhile _ _    => nil
+    | Cresource _ c => accesses c s
+    | Cwith _ _ _   => nil
+    | Cinwith _ c   => accesses c s
   end.
 
 Fixpoint writes c s :=
   match c with
-    | Cskip => nil
-    | (Cassign x e)   => nil
-    | (Cread x e)     => nil
-    | (Cwrite e e')   => edenot e s :: nil
-    | (Calloc x e)    => nil
-    | (Cdispose e)    => edenot e s :: nil
-    | (Cseq c1 c2)    => writes c1 s
-    | (Cpar c1 c2)    => writes c1 s ++ writes c2 s
-    | (Cif b c1 c2)   => nil
-    | (Cwhile b c)    => nil
-    | (Cresource r c) => writes c s
-    | (Cwith r b c)   => nil
-    | (Cinwith r c)   => writes c s
+    | Cskip         => nil
+    | Cassign _ _   => nil
+    | Cread _ _     => nil
+    | Cwrite e _    => edenot e s :: nil
+    | Calloc _ _    => nil
+    | Cdispose e    => edenot e s :: nil
+    | Cseq c1 _     => writes c1 s
+    | Cpar c1 c2    => writes c1 s ++ writes c2 s
+    | Cif _ _ _     => nil
+    | Cwhile _ _    => nil
+    | Cresource _ c => writes c s
+    | Cwith _ _ _   => nil
+    | Cinwith _ c   => writes c s
   end.
 
 (** A command aborts in a given state whenever it can access
@@ -276,17 +274,17 @@ must satisfy mutual exclusion.  *)
 Fixpoint wf_cmd c :=
   match c with
     | Cskip         => true
-    | Cassign x e   => true
-    | Cread x e     => true
-    | Cwrite e e'   => true
-    | Calloc x e    => true
-    | Cdispose e    => true
+    | Cassign _ _   => true
+    | Cread _ _     => true
+    | Cwrite _ _    => true
+    | Calloc _ _    => true
+    | Cdispose _    => true
     | Cseq c1 c2    => wf_cmd c1 && wf_cmd c2
     | Cpar c1 c2    => [&& wf_cmd c1, wf_cmd c2 & disjoint (locked c1) (locked c2)]
-    | Cif b c1 c2   => user_cmd c1 && user_cmd c2
-    | Cwhile b c    => user_cmd c
-    | Cresource r c => wf_cmd c
-    | Cwith r b c   => user_cmd c
+    | Cif _ c1 c2   => user_cmd c1 && user_cmd c2
+    | Cwhile _ c    => user_cmd c
+    | Cresource _ c => wf_cmd c
+    | Cwith _ _ c   => user_cmd c
     | Cinwith r c   => wf_cmd c && (r \notin (locked c))
   end.
 
@@ -305,17 +303,12 @@ elim=>//=.
 by move=>_ _ ? _ ->.
 Qed.
 
-Lemma user_cmd_locked: forall c, user_cmd c -> locked c == nil.
-Proof.
-elim=>//=.
-- by move=>? H1 ? H2 /andP [u1 _]; apply: (H1 u1).
-- by move=>? H1 ? H2 /andP [u1 u2]; move/eqP: (H1 u1) =>->; move/eqP: (H2 u2) =>->.
-by move=>? ? H u; move/eqP: (H u)=>->.
-Qed.
+Lemma user_cmd_locked: forall c, user_cmd c -> locked c = nil.
+Proof. by move=>? /user_cmdD/andP [_ /eqP]. Qed.
 Hint Immediate user_cmd_locked : core.
 
 Lemma user_cmd_wf: forall c, user_cmd c -> wf_cmd c.
-Proof. by move=>c u; case/andP: (user_cmdD u). Qed.
+Proof. by move=>? /user_cmdD/andP []. Qed.
 Hint Immediate user_cmd_wf : core.
 
 Lemma locked_locks: forall r c, r \in (locked c) -> r \in (locks c).
@@ -340,7 +333,7 @@ move=>c ss c' ss'; elim=>//=.
 - by move=>????? _ H -> /and3P [/H->->].
 - by move=>????? _ H -> /and3P [->/H->].
 - by move=>???->.
-- by move=>????? u; rewrite (user_cmd_wf u); move/eqP: (user_cmd_locked u)=>->.
+- by move=>????? /user_cmdD/andP [->/eqP->].
 by move=>????? _ H -> /andP [/H ->].
 Qed.
 
@@ -361,33 +354,33 @@ Qed.
 
 Fixpoint fvE e :=
   match e with
-    | (Evar v)      => v :: nil
-    | (Enum n)      => nil
-    | (Eplus e1 e2) => fvE e1 ++ fvE e2
+    | Evar v      => v :: nil
+    | Enum _      => nil
+    | Eplus e1 e2 => fvE e1 ++ fvE e2
   end.
 
 Fixpoint fvB b :=
   match b with
-    | Beq e1 e2   => fvE e1 ++ fvE e2
-    | Band b1 b2  => fvB b1 ++ fvB b2
-    | Bnot b      => fvB b
+    | Beq e1 e2  => fvE e1 ++ fvE e2
+    | Band b1 b2 => fvB b1 ++ fvB b2
+    | Bnot b     => fvB b
   end.
 
 Fixpoint fvC c :=
   match c with
-    | Cskip           => nil
-    | (Cassign x e)   => x :: fvE e
-    | (Cread x e)     => x :: fvE e
-    | (Cwrite e e')   => fvE e ++ fvE e'
-    | (Calloc x e)    => x :: fvE e
-    | (Cdispose e)    => fvE e
-    | (Cseq c1 c2)    => fvC c1 ++ fvC c2
-    | (Cpar c1 c2)    => fvC c1 ++ fvC c2
-    | (Cif b c1 c2)   => fvB b ++ fvC c1 ++ fvC c2
-    | (Cwhile b c)    => fvB b ++ fvC c
-    | (Cresource r c) => fvC c
-    | (Cwith r b c)   => fvB b ++ fvC c
-    | (Cinwith r c)   => fvC c
+    | Cskip         => nil
+    | Cassign x e   => x :: fvE e
+    | Cread x e     => x :: fvE e
+    | Cwrite e e'   => fvE e ++ fvE e'
+    | Calloc x e    => x :: fvE e
+    | Cdispose e    => fvE e
+    | Cseq c1 c2    => fvC c1 ++ fvC c2
+    | Cpar c1 c2    => fvC c1 ++ fvC c2
+    | Cif b c1 c2   => fvB b ++ fvC c1 ++ fvC c2
+    | Cwhile b c    => fvB b ++ fvC c
+    | Cresource _ c => fvC c
+    | Cwith _ b c   => fvB b ++ fvC c
+    | Cinwith _ c   => fvC c
   end.
 
 (** Below, we define the set of syntactically updated variables
@@ -396,19 +389,19 @@ Fixpoint fvC c :=
 
 Fixpoint wrC c :=
   match c with
-    | Cskip           => nil
-    | (Cassign x e)   => x :: nil
-    | (Cread x e)     => x :: nil
-    | (Cwrite e e')   => nil
-    | (Calloc x e)    => x :: nil
-    | (Cdispose e)    => nil
-    | (Cseq c1 c2)    => wrC c1 ++ wrC c2
-    | (Cpar c1 c2)    => wrC c1 ++ wrC c2
-    | (Cif b c1 c2)   => wrC c1 ++ wrC c2
-    | (Cwhile b c)    => wrC c
-    | (Cresource r c) => wrC c
-    | (Cwith r b c)   => wrC c
-    | (Cinwith r c)   => wrC c
+    | Cskip         => nil
+    | Cassign x _   => x :: nil
+    | Cread x _     => x :: nil
+    | Cwrite _ _    => nil
+    | Calloc x _    => x :: nil
+    | Cdispose _    => nil
+    | Cseq c1 c2    => wrC c1 ++ wrC c2
+    | Cpar c1 c2    => wrC c1 ++ wrC c2
+    | Cif _ c1 c2   => wrC c1 ++ wrC c2
+    | Cwhile _ c    => wrC c
+    | Cresource _ c => wrC c
+    | Cwith _ _ c   => wrC c
+    | Cinwith _ c   => wrC c
   end.
 
 (** We also define the operation of substituting an expression for
