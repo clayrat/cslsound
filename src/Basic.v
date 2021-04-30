@@ -169,6 +169,11 @@ Proof.
 by move=>Ha Hb; apply/eqP=>He; rewrite -He Ha in Hb.
 Qed.
 
+Lemma remove_irr y (l : seq A) : y \notin l -> remove y l = l.
+Proof.
+move=>H; rewrite /remove; apply/all_filterP/allP=>x; move: H=>/[swap] /=; exact: inNotin.
+Qed.
+
 Lemma remove_lminus y (l l' : seq A) : remove y (lminus l l') = lminus (remove y l) l'.
 Proof.
 by rewrite /lminus /remove -!filter_predI /predI; apply/eq_in_filter=>x H /=; rewrite andbC.
@@ -184,9 +189,7 @@ Qed.
 
 Lemma lminus_remove y (l l' : seq A) : y \notin l -> lminus l (remove y l') = lminus l l'.
 Proof.
-move=>H.
-have Hl : remove y l = l by apply/all_filterP/allP=>x; move: H=>/[swap] /=; exact: inNotin.
-by rewrite -{1}Hl lminus_remove2 remove_lminus Hl.
+by move=>H; rewrite -{1}(remove_irr H) lminus_remove2 remove_lminus (remove_irr H).
 Qed.
 
 Lemma cat_lminus (p q r : seq A) : lminus p (q ++ r) = lminus (lminus p q) r.

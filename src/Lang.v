@@ -88,7 +88,7 @@ Fixpoint locked c :=
     | Cpar c1 c2    => locked c1 ++ locked c2
     | Cif _ _ _     => nil
     | Cwhile _ _    => nil
-    | Cresource r c => filter (predC1 r) (locked c)
+    | Cresource r c => remove r (locked c)
     | Cwith _ _ _   => nil
     | Cinwith r c   => r :: locked c
   end.

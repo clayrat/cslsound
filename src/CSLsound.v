@@ -540,7 +540,7 @@ Lemma safe_par:
 Proof.
 elim=>//= ? IH C1 s h1 ?? [S1][AB1][AC1] H1 C2 h2 ? [S2][AB2][AC2] H2 /and3P [???] HD FV1 FV2 FV3 FV4 FV5 FV6; do!split=>//.
 - move=>hF; rewrite hdef_hplus hplusA; case=>?? HH.
-  case : {-2}_ {-2}_ /HH (erefl (Cpar C1 C2)) (erefl (s, hplus h1 (hplus h2 hF)))=>//??? A; case=>E1 E2 EQ; rewrite ?E1 ?E2 EQ in A.
+  case: {-2}_ {-2}_ /HH (erefl (Cpar C1 C2)) (erefl (s, hplus h1 (hplus h2 hF)))=>//??? A; case=>E1 E2 EQ; rewrite ?E1 ?E2 EQ in A.
   (* No aborts *)
   - by apply/AB1; last by [exact:A]; rewrite hdef_hplus2.
   - by rewrite hplusAC in A; last by [apply/hdefC];
@@ -554,7 +554,7 @@ elim=>//= ? IH C1 s h1 ?? [S1][AB1][AC1] H1 C2 h2 ? [S2][AB2][AC2] H2 /and3P [??
   - by move/AC2; rewrite hplusC /hplus; last by [apply/hdefC]; case: (h2 x).
 (* Step *)
 move=>hJ hF c' ss'; rewrite !hdef_hplus hplusA=>ST HS[?]?[?]??.
-case : {-2}_ {-2}_ {-1}_ {-1}_ /ST (erefl (Cpar C1 C2)) (erefl (s, hplus h1 (hplus h2 (hplus hJ hF)))) (erefl c') (erefl ss')=>//.
+case: {-2}_ {-2}_ {-1}_ {-1}_ /ST (erefl (Cpar C1 C2)) (erefl (s, hplus h1 (hplus h2 (hplus hJ hF)))) (erefl c') (erefl ss')=>//.
 (* C1 does a step *)
 - move=>????? A DI; case=>E1 E2 EQ E3 _; rewrite E1 EQ in A; rewrite E2 in DI.
   rewrite E3 /= E2 envs_app1 // in HS.
@@ -624,53 +624,70 @@ Qed.
 
 Lemma safe_resource:
  forall n C s h J r R Q (OK: safe n C s h (upd J r (Some R)) Q) (WF: wf_cmd C)
-   (DISJ: disjoint (fvA R) (wrC C)),
-     (forall hR (NIN: ~ In r (locked C)) (HD: hdef h hR)
+   (DISJ: disjoint (fvA R) (pr (wrC C))),
+     (forall hR (NIN: r \notin locked C) (HD: hdef h hR)
        (SAT_R: sat (s,hR) R),
        safe n (Cresource r C) s (hplus h hR) J (Astar Q R))
-   /\ (In r (locked C) -> safe n (Cresource r C) s h J (Astar Q R)).
+   /\ (r \in locked C -> safe n (Cresource r C) s h J (Astar Q R)).
 Proof.
-  induction n; inss;
-    try rewrite hdef_hplus in *; desf;
-    try (by inv ABORT; desf; try rewrite hplusA in A; eauto);
-    try (inv STEP).
+elim=>//= ? IH C s h ? r ?? [H1][H2][H3]H4 ? DJ; do!split=>//.
+- move=>hF D AB.
+  case: {-2}_ {-2}_ /AB (erefl (Cresource r C)) (erefl (s, hplus (hplus h hR) hF))=>// ??? A; case=>E1 E2 EQ; rewrite E2 EQ hplusA in A.
+  by apply/H2; last by [exact:A]; move: D; rewrite hdef_hplus hdef_hplus2; case.
+- by rewrite /hplus=>a /H3; case: (h a).
+- move=>hJ hF c' ss' ST SAT HD1 HD2.
+  case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cresource r C)) (erefl (s, hplus (hplus h hR) (hplus hJ hF))) (erefl c') (erefl ss')=>//;
+  rewrite remove_irr // in SAT *.
+  (* normal step *)
+  move=>??? c'' ? R; case=>EQ1 EQ2 EQ3 EQ4 EQ5 ?.
+  rewrite EQ1 EQ2 EQ3 EQ5 hplusA /= in R *. rewrite EQ4 /= EQ1 in SAT.
+  move: (prop2 R)=>/= [SU1][SU2][?]B.
+  case/orP: (orbN (r \in locked c''))=>RIN.
+  - rewrite -(hplusA hR) in R.
+    exploit H4; first by [exact:R].
+    - rewrite (sat_envs_expand RIN) //=.
+      - exists hR, hJ; do!split=>//.
+        - by rewrite /upd eq_refl.
+        - by rewrite envs_upd_irr //; left; rewrite /remove mem_filter RIN /= eq_refl.
+        by move: HD1; rewrite hdef_hplus; case.
+      by apply/disjoint_locked/red_wf_cmd; first by exact: R.
+    - by move: HD1; rewrite hdef_hplus hdef_hplus2; case.
+    - by move: HD2; rewrite hdef_hplus; case.
+    - by move: HD2; rewrite !hdef_hplus; case.
+    case=>HH1[HH2][?][?][?][?][SA] S.
+    exploit IH; first by exact: S.
+    - by apply/red_wf_cmd; first by exact: R.
+    - by move=>? Hx ?; apply/DJ; [exact: Hx|apply/SU2].
+    move=>[? FU]; rewrite envs_upd_irr in SA; last by left.
+    by exists HH1, HH2; do!split=>//; [rewrite envs_removeAll_irr|apply/FU].
+  rewrite (hplusAC hF) in R; last by move: HD1; rewrite hdef_hplus; case=>_ /hdefC.
+  rewrite remove_irr // in SAT *.
+  exploit H4; first by [exact:R].
+  - by rewrite envs_upd_irr; last by left.
+  - by move: HD1; rewrite hdef_hplus; case.
+  - by move: HD2; rewrite hdef_hplus hdef_hplus2; case.
+  - by move: HD1; rewrite hdef_hplus hdef_hplus2; case=>_ /hdefC.
+  case=>HH1[HH2][a1][?][a2][a3][SA] S.
+  exploit IH; first by exact: S.
+  - by apply/red_wf_cmd; first by exact: R.
+  - by move=>? Hx ?; apply/DJ; [exact: Hx|apply/SU2].
+  move=>[FU ?]; rewrite envs_upd_irr in SA; last by left.
+  rewrite (hplusAC hF) -1?hplusA in a1; last by move: a3; rewrite hdef_hplus2; case=>/hdefC.
+  move: SAT_R; rewrite (prop1_A (s':=ss'.1)) => SAT_R.
+  - exists (hplus HH1 hR), HH2; do!split=>//.
+    - by move: a3; rewrite hdef_hplus hdef_hplus2; case=>/hdefC.
+    - by move: a2; rewrite hdef_hplus hdef_hplus2; case; move: HD2; rewrite hdef_hplus; case.
+    - by move: a3; rewrite hdef_hplus2; case.
+    by apply/FU=>//; move: a2; rewrite hdef_hplus2; case.
+  by move=>Hx; apply/esym/B; move/DJ: Hx => /idP.
+(* exit *)
+- move=>?? [? EQ] -> EQ2 ??; rewrite -EQ EQ2 /= in SAT *.
+  exists (hplus h hR), hJ; do!split=>//=.
+  by apply/safe_skip=>/=; exists h, hR; do!split=>//; apply/H1/esym.
+- move=>hF D AB.
+  case: {-2}_ {-2}_ /AB (erefl (Cresource r C)) (erefl (s, hplus h hF))=>// ??? A; case=>E1 E2 EQ; rewrite E2 EQ in A.
+  by apply/H2; first by exact: D.
 
-  by unfold hplus in *; desf; eauto.
-
-  { (* normal step *)
-  rewrite removeAll_irr in *; simpls.
-  rewrite hplusA in *.
-  assert (B := prop2 R0); desf.
-  destruct (In_dec Z.eq_dec r (locked c'0)).
-
-  - rewrite <- (hplusA hR) in R0; simpls.
-    exploit SOK; eauto.
-      rewrite sat_envs_expand; eauto.
-      simpl; repeat eexists; eauto .
-      by unfold upd; desf.
-      rewrite envs_upd_irr; try rewrite In_removeAll; tauto.
-      eby eapply disjoint_locked, red_wf_cmd.
-    ins; desf.
-    exploit IHn; eauto using red_wf_cmd; ins; desf.
-      by unfold disjoint, pred_of_list in *; ins; eauto.
-    rewrite envs_upd_irr in *; vauto.
-    by repeat eexists; eauto; rewrite envs_removeAll_irr; auto.
-
-  - rewrite (hplusAC hF) in R0; auto.
-    rewrite removeAll_irr in *; simpls.
-    exploit SOK; eauto; [by rewrite envs_upd_irr; vauto |intro M; desf].
-    exploit IHn; eauto using red_wf_cmd; ins; desf.
-      by unfold disjoint, pred_of_list in *; ins; eauto.
-    rewrite envs_upd_irr in *; vauto.
-    rewrite hdef_hplus2 in *; desf.
-    rewrite (hplusAC hF), <- (hplusA h') in M; auto.
-    rewrite (prop1_A (s':=fst ss')) in SAT_R.
-    repeat eexists; eauto.
-    by symmetry; apply B2; unfold disjoint in *; des; eauto.
-  }
-  { (* exit *)
-    by repeat eexists; eauto; eapply safe_skip; simpl; eauto 8.
-  }
   { (* normal step *)
     assert (B := prop2 R0); desf.
     simpls; rewrite envs_removeAll2 in SAT; auto.
