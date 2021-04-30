@@ -632,16 +632,16 @@ Lemma safe_resource:
 Proof.
 elim=>//= ? IH C s h ? r ?? [H1][H2][H3]H4 ? DJ; do!split=>//.
 - move=>hF D AB.
-  case: {-2}_ {-2}_ /AB (erefl (Cresource r C)) (erefl (s, hplus (hplus h hR) hF))=>// ??? A; case=>E1 E2 EQ; rewrite E2 EQ hplusA in A.
+  case: {-2}_ {-2}_ /AB (erefl (Cresource r C)) (erefl (s, hplus (hplus h hR) hF))=>// ??? A; case=>? E2 EQ; rewrite E2 EQ hplusA in A.
   by apply/H2; last by [exact:A]; move: D; rewrite hdef_hplus hdef_hplus2; case.
-- by rewrite /hplus=>a /H3; case: (h a).
+- by rewrite /hplus=>? /H3; case: (h _).
 - move=>hJ hF c' ss' ST SAT HD1 HD2.
   case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cresource r C)) (erefl (s, hplus (hplus h hR) (hplus hJ hF))) (erefl c') (erefl ss')=>//;
   rewrite remove_irr // in SAT *.
   (* normal step *)
   move=>??? c'' ? R; case=>EQ1 EQ2 EQ3 EQ4 EQ5 ?.
   rewrite EQ1 EQ2 EQ3 EQ5 hplusA /= in R *. rewrite EQ4 /= EQ1 in SAT.
-  move: (prop2 R)=>/= [SU1][SU2][?]B.
+  move: (prop2 R)=>/= [?][SU2][?]B.
   case/orP: (orbN (r \in locked c''))=>RIN.
   - rewrite -(hplusA hR) in R.
     exploit H4; first by [exact:R].
@@ -687,40 +687,43 @@ elim=>//= ? IH C s h ? r ?? [H1][H2][H3]H4 ? DJ; do!split=>//.
 - move=>hF D AB.
   case: {-2}_ {-2}_ /AB (erefl (Cresource r C)) (erefl (s, hplus h hF))=>// ??? A; case=>E1 E2 EQ; rewrite E2 EQ in A.
   by apply/H2; first by exact: D.
-
-  { (* normal step *)
-    assert (B := prop2 R0); desf.
-    simpls; rewrite envs_removeAll2 in SAT; auto.
-    forward eapply SOK as X; eauto; [by rewrite envs_upd_irr; auto|desf].
-    forward eapply IHn as Y; eauto using red_wf_cmd.
-      by unfold disjoint, pred_of_list in *; ins; eauto.
-    ins; desf.
-
-    destruct (In_dec Z.eq_dec r (locked c'0)).
-      rewrite envs_upd_irr in *; auto.
-      rewrite envs_removeAll2; auto.
-      by repeat eexists; eauto.
-
-    rewrite envs_removeAll_irr; try rewrite In_removeAll; intuition.
-    rewrite sat_envs_expand in X3; try edone; ins; desf.
-    rewrite envs_upd_irr in *; try rewrite In_removeAll; intuition.
-    unfold upd in X3; desf; simpls.
-    rewrite hdef_hplus, hdef_hplus2 in *; desf.
-    rewrite !hplusA in *.
-    rewrite <- hplusA in X.
-    repeat eexists; eauto.
-    eby eapply disjoint_locked.
-  }
+(* normal step *)
+move=>hJ hF c' ss' R /= SAT ???.
+case: {-2}_ {-2}_ {-1}_ {-2}_ /R (erefl (Cresource r C)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//=.
+- move=>??? c'' ? R; case=>EQ1 EQ2 EQ3 EQ4 EQ5; rewrite EQ1 EQ2 EQ3 EQ5 in R *; rewrite EQ4 /= EQ1 in SAT.
+  move: (prop2 R)=>/= [?][SU2][?]?.
+  rewrite envs_removeAll2 // in SAT.
+  exploit (H4 _ _ _ _ R)=>//; first by rewrite envs_upd_irr; last by right.
+  move=>[h'][hJ'][X0][HD1][?][HD3][X3]X4.
+  exploit (IH _ _ _ _ _ _ _ X4).
+  - by apply/red_wf_cmd; first by exact:R.
+  - by move=>? Hx ?; apply/DJ; [exact:Hx|apply/SU2].
+  move=>[Y Y0]; case/orP: (orbN (r \in locked c''))=>RIN.
+  - rewrite envs_upd_irr in X3; last by right.
+    rewrite envs_removeAll2 //.
+    by exists h', hJ'; do!split=>//; apply/Y0.
+  rewrite envs_removeAll_irr; last by rewrite mem_filter /= eq_refl.
+  move: X3; rewrite (sat_envs_expand (r:=r)) //; last by apply/disjoint_locked.
+  rewrite envs_upd_irr; last by left; rewrite mem_filter /= eq_refl H.
+  rewrite /upd /= eq_refl /=; case => [h1][h2][?][?][EQ']?.
+  rewrite EQ' hplusA -hplusA in X0.
+  rewrite EQ' in HD1 HD3.
+  exists (hplus h' h1), h2; do!split=>//.
+  - by move: HD1; rewrite hdef_hplus hdef_hplus2; case.
+  - by move: HD3; rewrite !hdef_hplus; case.
+  - by move: HD3; rewrite hdef_hplus; case.
+  by apply/Y=>//; move: HD1; rewrite hdef_hplus2; case.
+by move=>?? [? EQ]; rewrite -EQ /= in_nil in H.
 Qed.
 
 Theorem rule_resource J P R r C Q:
   CSL (upd J r (Some R)) P C Q ->
-  disjoint (fvA R) (wrC C) ->
+  disjoint (fvA R) (pr (wrC C)) ->
   CSL J (Astar P R) (Cresource r C) (Astar Q R).
 Proof.
-  unfold CSL; inss.
-  edestruct safe_resource as (X & _); eauto.
-  by apply X; try rewrite user_cmd_locked.
+rewrite /CSL /=; case=>/[dup]/user_cmdD/andP [? /eqP LC]? B ?; do!split=>// ???[?][?][S1][?][?]<-.
+exploit safe_resource; first by [apply/B; exact: S1]; move=>// [H _].
+by apply/H=>//; rewrite LC.
 Qed.
 
 (** *** Frame rule *)
