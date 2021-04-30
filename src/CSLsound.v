@@ -732,29 +732,42 @@ Lemma safe_frame:
  forall n C s h J Q
    (OK: safe n C s h J Q) hR
    (HD: hdef h hR) R
-   (DISJ: disjoint (fvA R) (wrC C))
+   (DISJ: disjoint (fvA R) (pr (wrC C)))
    (SAT_R: sat (s,hR) R),
  safe n C s (hplus h hR) J (Astar Q R).
 Proof.
-  induction n; inss;
-  rewrite ?hdef_hplus, ?hplusA in *; desf; eauto 7.
-    by unfold hplus in *; desf; eauto.
-  rewrite (hplusAC hF) in STEP; auto.
-  edestruct SOK as (h' & ?); eauto; desf.
-  rewrite hdef_hplus2 in *; des.
-  exists (hplus h' hR), hJ'.
-  rewrite hplusA, (hplusAC hF); repeat split; eauto.
-  destruct (prop2 STEP) as (B1 & B2 & B3 & B4).
-  eapply IHn; repeat split; eauto;
-    try (by unfold disjoint, pred_of_list in *; ins; eauto).
-  eapply prop1_A with s; eauto.
+elim=>//= ? IH ?? h ?? [SQ][A][AC]OK hR ?? DJ SAT; do!split=>//.
+- by move=>?; exists h, hR; do!split=>//; apply/SQ.
+- move=>?; rewrite !hplusA=> HD AB; apply/A; last by exact:AB.
+  by move: HD; rewrite hdef_hplus hdef_hplus2; case.
+- move=>? Ha Hp; apply/AC; first by exact:Ha.
+  by move: Hp; rewrite /hplus; case: (h _).
+move=>? hF ?? ST ? D1 D2 ?.
+rewrite hplusA (hplusAC hF) in ST; last by move: D1; rewrite hdef_hplus; case=>_ /hdefC.
+exploit OK; first by [exact:ST]; try by done.
+- by move: D1; rewrite hdef_hplus; case.
+- by move: D2; rewrite hdef_hplus hdef_hplus2; case.
+- by move: D1; rewrite hdef_hplus hdef_hplus2; case=>_ /hdefC.
+move=>[h'][hJ'][?][?][A2][A3][?]?.
+exists (hplus h' hR), hJ'; rewrite hplusA (hplusAC hF); last by move: A3; rewrite hdef_hplus2; case.
+do!split=>//.
+- by move: A3; rewrite hdef_hplus hdef_hplus2; case=>/hdefC.
+- by move: A2; rewrite hdef_hplus hdef_hplus2; case; move: D2; rewrite hdef_hplus; case.
+- by move: A3; rewrite hdef_hplus2; case.
+move: (prop2 ST)=> [B1][B2][B3] /= B4.
+apply/IH=>//.
+- by move: A2; rewrite hdef_hplus2; case.
+- by move=>? Hx ?; apply/DJ; [exact: Hx|apply/B2].
+apply/prop1_A; last by exact: SAT.
+by move=>? FV; apply/B4; move/DJ: FV =>/idP.
 Qed.
 
 Theorem rule_frame J P C Q R:
-  CSL J P C Q -> disjoint (fvA R) (wrC C) ->
+  CSL J P C Q -> disjoint (fvA R) (pr (wrC C)) ->
   CSL J (Astar P R) C (Astar Q R).
 Proof.
-  unfold CSL; inss; eauto using safe_frame.
+rewrite /CSL; case=>? S ?; split=>//= ???[?][?][?][?][?]<-; apply/safe_frame=>//.
+by apply: S.
 Qed.
 
 (** *** Conditional critical regions *)
@@ -765,16 +778,29 @@ Lemma safe_inwith:
     (WF: wf_cmd (Cinwith r C)),
   safe n (Cinwith r C) s h J Q.
 Proof.
-  induction n; inss;
-    [by inv ABORT; eauto|inv STEP; ins].
-  - exploit SOK; try eapply R; eauto.
-      by rewrite envs_cons2_irr in SAT.
-    ins; desf.
-    repeat eexists; eauto using red_wf_cmd.
-    by rewrite envs_cons2_irr.
-  - destruct END as (hQ & hJ' & ?); desf.
-    rewrite hdef_hplus in *; desf.
-    exists hQ, hJ'; rewrite !hplusA; repeat split; eauto 8 using hdefU2, hplusU2.
+elim=>//= ? IH C s h ?? r [END][A2][?] SOK /andP [??]; do!split=>//.
+- move=>hF ? AB.
+  case: {-2}_ {-2}_ /AB (erefl (Cinwith r C)) (erefl (s, hplus h hF))=>// ??? A; case=>_ EQ2 EQ.
+  by rewrite EQ2 EQ in A; apply/A2; last by exact:A.
+- move=>hJ hF c' ss' ST SAT D1 D2 ?.
+  case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cinwith r C)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//=.
+  - move=>????? R NIN; case=>EQ1 EQ2 EQ EQC EQSS.
+    rewrite EQSS EQ1 EQ2 EQ in R NIN *.
+    exploit SOK; first by [exact:R]; try done.
+    - by rewrite EQC EQ1 /= envs_cons2_irr in SAT.
+    move=>[h'][hJ']; do![case=>?].
+    exists h',hJ'; do!split=>//.
+    - by rewrite envs_cons2_irr.
+    by apply/IH=>//; apply/andP; split=>//; apply/red_wf_cmd; first by exact:R.
+move=>??; case=>_ EQ2 EQ EQC _.
+rewrite EQ /=; rewrite EQC /= in SAT.
+exploit END; first by move/esym: EQ2.
+move=>[h1][h2][?][?][?]HH; rewrite -HH in D1 D2 *.
+exists h1, h2; rewrite SAT; do!split=>//.
+- by rewrite hplusU hplusA.
+- 1,2: by move: D2; rewrite hdef_hplus; case.
+- by exists h2, (fun=>None); do!split=>//; [rewrite -EQ2|apply: hdefU2|apply: hplusU2].
+by apply/safe_skip.
 Qed.
 
 Theorem rule_with J P r B C Q:
