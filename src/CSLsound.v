@@ -118,6 +118,8 @@ rewrite (hplusAC h02) in HE; last by apply hdefC.
 by eauto.
 Qed.
 
+(* Can't have eqType on assn because it has functions *)
+
 Lemma precise_istar:
   forall (l : seq assn) (P: forall x, In x l -> precise x), precise (Aistar l).
 Proof.
@@ -1050,8 +1052,9 @@ Theorem rule_ex J P C Q:
   (forall x, CSL J (P x) C (Q x)) ->
   CSL J (Aex P) C (Aex Q).
 Proof.
-  unfold CSL; inss; [by destruct (H 0)|].
-  eapply safe_conseq; [eby apply H|]; vauto.
+rewrite /CSL=>H; split; first by move: (H 0)=>[].
+move=>??? /= [v Sv]; apply/safe_conseq; first by move/snd: (H v); apply.
+by move=>?? /=; exists v.
 Qed.
 
 (** *** Conjunction rule *)
@@ -1062,14 +1065,24 @@ Lemma safe_conj:
         (PREC: forall r, precise (assn_lift (J r))),
   safe n C s h J (Aconj Q1 Q2).
 Proof.
-  induction n; inss.
-  forward eapply SOK as X; eauto; forward eapply SOK0 as Y; eauto; ins; desf.
-  assert (P: precise (envs J (locked C) (locked c'))).
-    by apply precise_istar; ins; eapply in_map_iff in IN; desf.
-  assert (hJ' = hJ'0)
-    by (rewrite hplusAC in *; rewrite X in *; auto; eapply P; eauto); subst.
-  assert (h' = h'0); subst; eauto 10.
-  by rewrite X in *; eapply hplusKr; eauto.
+elim=>//= ? IH C ?? J ? [S1][AB][A]OK1 ? [S2][_][_]OK2 PREC; do!split=>//.
+- by apply/S1.
+- by apply/S2.
+move=>?? c' ss' ST SAT D1 D2 D3.
+case: (OK1 _ _ _ _ ST SAT D1 D2 D3)=>h0[hJ0][SS0][?][?][?][?]?.
+case: (OK2 _ _ _ _ ST SAT D1 D2 D3)=>h1[hJ1][SS1][?][?][?][?]?.
+have P : precise (envs J (locked C) (locked c'))
+  by apply/precise_istar=>? /in_map_iff /= [?][<-]?; apply/PREC.
+rewrite SS0 in SS1.
+have EQ01 : hJ0 = hJ1.
+- rewrite hplusAC in SS1; last by apply/hdefC.
+  rewrite [hplus _ (hplus hJ1 _)]hplusAC in SS1; last by apply/hdefC.
+  by apply/(P _ _ _ _ ss'.1); try by [exact: SS1]; try by [done];
+  rewrite hdef_hplus2; split=>//; apply/hdefC.
+have EQ02 : h0 = h1
+  by rewrite EQ01 in SS1; apply/hplusKr; first by [exact: SS1]; rewrite hdef_hplus2; split=>//; rewrite -EQ01.
+rewrite SS0; exists h0, hJ0; do!split=>//.
+by apply/IH=>//; rewrite EQ02.
 Qed.
 
 Theorem rule_conj J P1 P2 C Q1 Q2:
@@ -1078,6 +1091,6 @@ Theorem rule_conj J P1 P2 C Q1 Q2:
   (forall r, precise (assn_lift (J r))) ->
   CSL J (Aconj P1 P2) C (Aconj Q1 Q2).
 Proof.
-  unfold CSL; inss; eauto using safe_conj.
+rewrite /CSL; case=>? S1 [_] S2 ?; split=>//= ???[??].
+by apply/safe_conj=>//; [apply/S1|apply/S2].
 Qed.
-
