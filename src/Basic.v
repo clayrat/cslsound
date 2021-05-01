@@ -103,6 +103,23 @@ Corollary hdef_hplus_b :
   forall h1 h2 h3, hdef h1 h2 -> hdef h1 h3 -> hdef h1 (hplus h2 h3).
 Proof. by move=>*; apply/hdef_hplus2. Qed.
 
+Lemma hdef_upd :
+  forall h h' x v, h x <> None -> hdef h h' ->
+  hdef (upd h x v) h'.
+Proof.
+move=>???? H0; rewrite /hdef /upd => H x; case: (H x); last by right.
+move: H0; case: eqP; last by left.
+by move=>->/[swap]->.
+Qed.
+
+Lemma hdef_upds :
+  forall h h' x v v', hdef (upd h x (Some v)) h' ->
+  hdef (upd h x (Some v')) h'.
+Proof.
+move=>?????; rewrite /hdef /upd => H x; case: (H x); last by right.
+by case: eqP=>//; left.
+Qed.
+
 Hint Resolve hdef_hplus_a hdef_hplus_b : core.
 Hint Immediate hdefC : core.
 

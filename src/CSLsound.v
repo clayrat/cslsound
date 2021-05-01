@@ -61,20 +61,20 @@ Lemma sat_istar_map_expand :
       /\ sat (ss.1, h2) (Aistar (map f (remove r l)))
       /\ hdef h1 h2 /\ hplus h1 h2 = ss.2.
 Proof.
-move=>r l [s h] f.
-elim: l h=>//= a l H h; rewrite in_cons=>/orP H1 /andP [Ha Hu]; case: H1.
+move=>? l [? h] ?.
+elim: l h=>//= a l H ?; rewrite in_cons=>/orP H1 /andP [Ha Hu]; case: H1.
 - move/eqP=>->; rewrite /remove eq_refl=>/=; suff: all (predC1 a) l by move/all_filterP=>->.
-  by apply/allP=>x /=; case: eqP Ha=>//-> /[swap] ->.
-move=>Hr; case: eqP=>/=; first by move: Ha => /[swap] ->; rewrite Hr.
+  by apply/allP=>? /=; case: eqP Ha=>//->/[swap]->.
+move=>Hr; case: eqP=>/=; first by move: Ha=>/[swap]->; rewrite Hr.
 move=>Hn; split.
-- move=>[h1][h2][H0][H1][H2]<-.
-  move: ((H h2 Hr Hu).1 H1)=>[h3][h4][HH1][HH2][HH3]HH4.
+- move=>[h1][h2][?][H1][H2]<-.
+  move: ((H h2 Hr Hu).1 H1)=>[h3][h4][?][?][?]HH4.
   move: H1 H2; rewrite -{}HH4=>_ H2. move/hdef_hplus2: H2=>[H21 H22].
   exists h3, (hplus h1 h4); do!split=>//.
   exists h1, h4; do!split=>//.
   - by apply/hdef_hplus2; split; [apply/hdefC|].
   by rewrite hplusAC.
-move=>[h1][h2][H1][[h3][h4][H2][H3][H4 <-]][H6 <-].
+move=>[h1][?][?][[h3][h4][?][?][?<-]][H6<-].
 move/hdef_hplus2: H6=>[H5 H6].
 exists h3, (hplus h1 h4); do!split=>//.
 - by apply: (H (hplus h1 h4) Hr Hu).2; exists h1, h4; do!split.
@@ -143,41 +143,41 @@ Lemma sat_envs_expand:
               /\ sat (ss.1, h2) (envs J (remove r l) l')
               /\ ss.2 = hplus h1 h2 /\ hdef h1 h2.
 Proof.
-rewrite /envs=>/= r l l' Hi Hn Hu ??.
+rewrite /envs=>/= r ?? Hi Hn ???.
 rewrite (sat_istar_map_expand (r:=r)).
-- by rewrite remove_lminus; split; move=>[h1][h2][H1][H2][H3] H4; exists h1, h2; do!split.
+- by rewrite remove_lminus; split; move=>[h1][h2][?][?][?]?; exists h1, h2; do!split.
 - by rewrite /lminus mem_filter Hi /= Hn.
 by rewrite /lminus; apply/filter_uniq.
 Qed.
 
 Lemma envs_app1 :
   forall x z (D: disjoint x z) J y, envs J (x ++ z) (y ++ z) = envs J x y.
-Proof. by rewrite /envs =>/= ?? H ??; rewrite canc_lminus. Qed.
+Proof. by rewrite /envs=>/= ?????; rewrite canc_lminus. Qed.
 
 Lemma envs_app2 :
   forall x z (D: disjoint z x) J y, envs J (z ++ x) (z ++ y) = envs J x y.
-Proof. by rewrite /envs =>/= ?? H ??; rewrite cancr_lminus. Qed.
+Proof. by rewrite /envs=>/= ?????; rewrite cancr_lminus. Qed.
 
 Lemma envs_removeAll_irr:
   forall r l (NIN: r \notin l) J l', envs J l (remove r l') = envs J l l'.
 Proof.
-by rewrite /envs=>/= ?? H ??; rewrite lminus_remove.
+by rewrite /envs=>/= ?????; rewrite lminus_remove.
 Qed.
 
 Lemma envs_removeAll2:
   forall r l' (IN: r \in l') J l,
     envs J (remove r l) (remove r l') = envs J l l'.
 Proof.
-rewrite /envs=>/= ? l' H ??; rewrite lminus_remove2.
-do 2!f_equal; rewrite /remove; apply/all_filterP/allP=>x Hy /=.
+rewrite /envs=>/= ? l' ???; rewrite lminus_remove2.
+do 2!f_equal; rewrite /remove; apply/all_filterP/allP=>? Hy /=.
 rewrite eq_sym; apply/(inNotin (p:=l'))=>//.
-by move: Hy; rewrite mem_filter /= => /andP [].
+by move: Hy; rewrite mem_filter /= =>/andP [].
 Qed.
 
 Lemma envs_cons2_irr:
   forall r l (NIN: r \notin l) J l', envs J (r :: l) (r :: l') = envs J l l'.
 Proof.
-rewrite /envs=> r ? H ?? /=; do 2!f_equal; rewrite in_cons eq_refl /=.
+rewrite /envs=>r ? H ?? /=; do 2!f_equal; rewrite in_cons eq_refl /=.
 rewrite /lminus; apply/eq_in_filter=>x Hx /=; rewrite in_cons negb_or.
 by suff: (x!=r); [move=>->| move: Hx H; apply/inNotin].
 Qed.
@@ -237,15 +237,13 @@ Definition CSL gamma p c q :=
 
 Fixpoint fvA p :=
   match p with
-    | Aemp            => (fun v => False)
-    | Apure B         => (fun v => v \in (fvB B))
-    | Apointsto e1 e2 => (fun v => v \in (fvE e1 ++ fvE e2))
-    | Anot P          => fvA P
-    | Astar P Q
-    | Awand P Q
-    | Aconj P Q
-    | Adisj P Q       => (fun v => fvA P v \/ fvA Q v)
-    | Aex P           => (fun v => exists x, fvA (P x) v)
+    | Aemp                  => fun v => False
+    | Apure B               => fun v => v \in (fvB B)
+    | Apointsto e1 e2       => fun v => v \in (fvE e1 ++ fvE e2)
+    | Anot P                => fvA P
+    | Astar P Q | Awand P Q
+    | Aconj P Q | Adisj P Q => fun v => fvA P v \/ fvA Q v
+    | Aex P                 => fun v => exists x, fvA (P x) v
   end.
 
 Definition fvAs gamma v := exists x : rname, fvA (assn_lift (gamma x)) v.
@@ -270,13 +268,13 @@ Lemma fvA_istar :
 Proof.
 elim=>/=.
 - by move=>?; split=>//; case=>? [].
-move=>a l IH v; split.
+move=>a ? IH v; split.
 - case=>H.
   - by exists a; split=>//; left.
-  by move: ((IH v).1 H); case=>x [Ha Hi]; exists x; split=>//; right.
+  by move: ((IH v).1 H); case=>x [??]; exists x; split=>//; right.
 case=>x [H]; case.
 - by move=>->; left.
-move=>Hi; right.
+move=>?; right.
 by apply/((IH v).2); exists x; split.
 Qed.
 
@@ -333,17 +331,17 @@ Corollary prop1_AsE :
     (A: forall v (FV: fvAs J v), s v = s' v),
   sat (s',h) (envs J l1 l2).
 Proof.
-by move=>?????? H H2; rewrite -prop1_As; last by apply: H2.
+by move=>??????? H2; rewrite -prop1_As; last by apply: H2.
 Qed.
 
 Corollary prop1_A2 :
   forall x P (NIN: ~ fvA P x) s v h, sat (upd s x v, h) P <-> sat (s, h) P.
-Proof. by move=>?? H ???; apply/prop1_A=>?; rewrite /upd; case: eqP=>// ->. Qed.
+Proof. by move=>??????; apply/prop1_A=>?; rewrite /upd; case: eqP=>// ->. Qed.
 
 Corollary prop1_As2 :
   forall x J (NIN: ~ fvAs J x) s v h l l',
   sat (upd s x v, h) (envs J l l') <-> sat (s, h) (envs J l l').
-Proof. by move=>?? H ?????; apply/prop1_As=>?; rewrite /upd; case: eqP=>// ->. Qed.
+Proof. by move=>????????; apply/prop1_As=>?; rewrite /upd; case: eqP=>// ->. Qed.
 
 (** 2. Safety is monotone with respect to the step number (Proposition 3 in paper). *)
 
@@ -807,12 +805,20 @@ Theorem rule_with J P r B C Q:
   CSL J (Aconj (Astar P (assn_lift (J r))) (Apure B)) C (Astar Q (assn_lift (J r))) ->
   CSL J P (Cwith r B C) Q.
 Proof.
-  unfold CSL; inss; destruct n; inss; [by inv ABORT | ].
-  inv STEP; ins; desf; rewrite (user_cmd_locked U) in *; simpls.
-  rewrite hdef_hplus, hdef_hplus2 in *; desf.
-  exists (hplus h h1), (fun _ => None); rewrite !hplusA; repeat split; auto.
-  eapply safe_inwith; simpl; eauto 10.
-  rewrite (user_cmd_locked); auto.
+rewrite /CSL; case=>U SA /=; split=>// n s h ?.
+elim: n=>//= n ?; do!split=>//.
+- move=>hF ? AB.
+  by case: {-2}_ {-2}_ /AB (erefl (Cwith r B C)) (erefl (s, hplus h hF)).
+move=>hJ hF c' ss' ST SAT D1 D2 D3.
+case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cwith r B C)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//=.
+move=>???? Bd; case=>EQ1 EQ2 EQ3 EQSS EQC ?; move: SAT. rewrite EQC EQ1 EQ3 EQSS /= (user_cmd_locked U) /=.
+case=>h1[?][?][->][?] EQJ; move: D1 D3; rewrite -EQJ hdef_hplus hdef_hplus2; case=>??[??].
+exists (hplus h h1), (fun _ => None); rewrite !hplusA; do!split=>//.
+- 1,2: by rewrite hdef_hplus.
+apply/safe_inwith=>/=.
+- apply/SA=>/=; rewrite EQ2 EQSS /= in Bd; split=>//.
+  by exists h, h1.
+by move: (user_cmd_wf U); rewrite (user_cmd_locked U) andbC.
 Qed.
 
 (** *** Sequential composition *)
@@ -822,18 +828,30 @@ Lemma safe_seq :
     (NEXT: forall m s' h', m <= n -> sat (s', h') Q -> safe m C2 s' h' J R),
   safe n (Cseq C C2) s h J R.
 Proof.
-  induction n; inss; [by inv ABORT; eauto|].
-  inv STEP; ins.
-    by repeat eexists; eauto; rewrite (user_cmd_locked U) in *.
-  exploit SOK; eauto; ins; desf; repeat eexists; eauto.
+elim=>//= ? IH C s h ??[A1][A2][?] SOK C2 U2 ? NX; do!split=>//.
+- move=>hF ? AB.
+  case: {-2}_ {-2}_ /AB (erefl (Cseq C C2)) (erefl (s, hplus h hF))=>// ??? A; case=>EQ1 EQ2 EQ.
+  by rewrite EQ1 EQ in A; apply/A2; last by exact:A.
+move=>hJ hF c' ss' ST SAT ???.
+case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cseq C C2)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//=.
+- move=>??; case=>EQ1 EQ2 EQ3 EQ4 ?; rewrite EQ3 EQ2 /=.
+  exists h, hJ; do!split=>//.
+  - by move: SAT; rewrite EQ4 -EQ1 EQ2 (user_cmd_locked U2).
+  by apply/NX=>//; apply/A1/esym.
+move=>????? ST; case=>EQ1 EQ2 EQ EQC EQSS; rewrite EQ1 EQ EQSS EQ2 in ST *; rewrite EQC /= in SAT.
+exploit SOK; first by [exact:ST]; try done.
+case=>h1[h2][->][?][?][?][?] S.
+exists h1,h2; do!split=>//; apply/IH=>//; first by exact: S.
+by move=>?????; apply/NX=>//; apply/leqW.
 Qed.
 
 Theorem rule_seq J P C1 Q C2 R :
   CSL J P C1 Q -> CSL J Q C2 R -> CSL J P (Cseq C1 C2) R.
 Proof.
-  unfold CSL; intuition; simpl; eauto using safe_seq.
+rewrite /CSL; case=>? S1 [?]S2 /=; do!split; first by apply/andP.
+move=>????; apply/safe_seq=>//; first by apply: S1.
+by move=>?????; apply: S2.
 Qed.
-
 
 (** *** Conditionals (if-then-else) *)
 
@@ -842,11 +860,18 @@ Theorem rule_if J P B C1 C2 Q:
   CSL J (Aconj P (Apure (Bnot B))) C2 Q ->
   CSL J P (Cif B C1 C2) Q.
 Proof.
-  unfold CSL; inss; destruct n; inss.
-  by inv ABORT.
-  inv STEP; repeat eexists; simpls; eauto;
-     try by rewrite user_cmd_locked in *.
-  eapply SF; clarify.
+rewrite /CSL; case=>U1 S1[U2]S2 /=; do!split; first by apply/andP.
+move=>n s h ?; elim: n=>//= ??; do!split=>//.
+- move=>hF ? AB.
+  by case: {-2}_ {-2}_ / AB (erefl (Cif B C1 C2)) (erefl (s, hplus h hF)).
+move=>hJ hF c' ss' ST SAT ???.
+case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cif B C1 C2)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//=;
+move=>???? BD; case=>EQ1 EQ2 EQ3 EQ EQC _.
+- rewrite EQ EQ2 /=; rewrite EQ1 EQ /= in BD; rewrite EQC EQ2 (user_cmd_locked U1) /= in SAT.
+  by exists h, hJ; do!split=>//; apply/S1.
+rewrite EQ EQ3 /=; rewrite EQ1 EQ /= in BD; rewrite EQC EQ3 (user_cmd_locked U2) /= in SAT.
+exists h, hJ; do!split=>//.
+by apply/S2=>/=; rewrite BD.
 Qed.
 
 (** *** While *)
@@ -855,23 +880,37 @@ Lemma safe_while:
   forall J P B C (OK: CSL J (Aconj P (Apure B)) C P) s h (SAT_P: sat (s, h) P) n,
     safe n (Cwhile B C) s h J (Aconj P (Apure (Bnot B))).
 Proof.
-  intros; revert s h SAT_P; generalize (le_refl n); generalize n at -2 as m.
-  induction n; destruct m; ins; [inv H|apply le_S_n in H].
-  unnw; intuition; desf; [by inv ABORT|].
-  inv STEP; repeat eexists; eauto; simpl.
-  destruct m; ins; desf; unnw; intuition; desf; [by inv ABORT|].
-  inv STEP0; repeat eexists; eauto; simpls.
-  - by rewrite (user_cmd_locked (proj1 OK)) in *.
-  - by eapply safe_seq; [eapply OK|by apply OK|]; simpls; eauto using le_trans.
-  - by apply safe_skip; simpls; clarify.
-(*  eapply rule_if, SAT_P; [eapply rule_seq|apply rule_skip]; eauto. *)
+move=>?? B C [UC SC] +++ n; move: n {1 3}n (leqnn n).
+elim=>// n IH m leq; first by case: n IH.
+move=>s h ?; case: m leq=>// m; rewrite ltnS=>leq /=.
+do!split=>//.
+- move=>hF ? AB.
+  by case: {-2}_ {-2}_ / AB (erefl (Cwhile B C)) (erefl (s, hplus h hF)).
+move=>hJ hF c' ss' ST SAT ???.
+case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cwhile B C)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//.
+move=>???; case=>EQ1 EQ2 EQ EQC EQSS.
+rewrite EQ EQ1 EQ2 /=; rewrite EQC /= in SAT.
+exists h, hJ; do!split=>//.
+case: m leq=>//= m le; do!split=>//.
+- move=>hF0 ? AB.
+  by case: {-2}_ {-2}_ / AB (erefl (Cif B (Cseq C (Cwhile B C)) Cskip)).
+move=>hJ0 hF0 c0' ss0' ST0 SAT0 ???.
+case: {-2}_ {-2}_ {-1}_ {-2}_ /ST0 (erefl (Cif B (Cseq C (Cwhile B C)) Cskip)) (erefl (s, hplus h (hplus hJ0 hF0))) (erefl c0') (erefl ss0')=>//;
+move=>???? B0; case=>EQ01 EQ02 EQ03 EQ0 EQ0C EQ0SS; rewrite EQ0 /=; rewrite EQ01 EQ0 /= in B0;
+exists h, hJ0; do!split=>//.
+- by move: SAT0; rewrite EQ0C EQ02 /= user_cmd_locked.
+- rewrite EQ02; apply/safe_seq=>//=; first by apply/SC=>/=; split.
+  by move=>??? leq0 ?; apply/IH=>//; apply/(leq_trans leq0); apply/ltnW.
+- by rewrite EQ0C EQ03 /= in SAT0.
+by rewrite EQ03; apply/safe_skip=>/=; split=>//; rewrite B0.
 Qed.
 
 Theorem rule_while J P B C :
   CSL J (Aconj P (Apure B)) C P ->
   CSL J P (Cwhile B C) (Aconj P (Apure (Bnot B))).
 Proof.
-  unfold CSL; inss; eapply safe_while; unfold CSL; eauto.
+rewrite /CSL /=; case=>??; split=>// ????.
+by apply/safe_while.
 Qed.
 
 (** *** Basic commands (Assign, Read, Write, Alloc, Free) *)
@@ -879,80 +918,97 @@ Qed.
 Theorem rule_assign J x E Q:
   ~ fvAs J x -> CSL J (subA x E Q) (Cassign x E) Q.
 Proof.
-  unfold CSL; inss; destruct n; inss;
-  [by inv ABORT | inv STEP; ins; desf].
-  rewrite subA_assign in *; eauto 10.
+rewrite /CSL=>?; split=>// n s h ?; elim: n=>// n IH /=; do!split=>//.
+- move=>hF0 ? AB.
+  by case: {-2}_ {-2}_ / AB (erefl (Cassign x E)).
+move=>hJ hF c' ss' ST SAT ??.
+case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cassign x E)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//.
+move=>?????? EQ01 EQ02; case=>EQ1 EQ2 EQ EQC EQSS ?.
+rewrite EQC /= in SAT; rewrite EQ01 in EQ; case: EQ=>EQS EQH; rewrite EQ02 /= EQH SAT.
+exists h, (fun=>None); do!split=>//.
+- by apply: hdefU2.
+- by apply: hdefU.
+by rewrite EQS EQ1 EQ2; apply safe_skip; rewrite -subA_assign.
 Qed.
 
 Theorem rule_read J x E E' :
-  ~ In x (fvE E) ->
-  ~ In x (fvE E') ->
+  x \notin fvE E ->
+  x \notin fvE E' ->
   ~ fvAs J x ->
   CSL J (Apointsto E E') (Cread x E) (Aconj (Apointsto E E') (Apure (Beq (Evar x) E'))).
 Proof.
-  unfold CSL; inss; destruct n; ins; unnw; intuition; desf.
-    by inv ABORT; ins; unfold hplus, upd in *; desf.
-    by unfold upd in *; desf.
-  inv STEP.
-  repeat eexists; eauto; eapply safe_skip; ins.
-  rewrite !prop1_E2; try done.
-  clear STEP; unfold hplus, upd in *; desf; rewrite H2 in *; desf.
+move=>???; rewrite /CSL; split=>//= n s h EQH; elim: n=>// n IH /=; do!split=>//.
+- move=>hF ? AB.
+  case: {-2}_ {-2}_ / AB (erefl (Cread x E)) (erefl (s, hplus h hF)) =>//.
+  by move=>??? NIN; case=>_ EQ2; rewrite EQH; move: NIN=>/[swap]-> /=; rewrite /hplus /upd EQ2 eq_refl.
+- by move=>?; rewrite EQH /upd mem_seq1 =>/eqP ->; rewrite eq_refl.
+move=>hJ hF c' ss' ST SAT ???.
+case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cread x E)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//.
+move=>??????? EQ01 RD EQ02; case=>EQ1 EQ2 EQ EQC EQSS.
+rewrite EQ01 in EQ; case: EQ=>EQS0 EQH0; rewrite EQ02 EQH0 /=; rewrite EQC /= in SAT.
+exists h, hJ; do!split=>//.
+apply/safe_skip; rewrite EQH EQS0 EQ1 /= !prop1_E2 //; split=>//.
+by rewrite EQH0 SAT EQ2 EQS0 /hplus EQH /upd eq_refl in RD; case: RD=><-; rewrite /upd !eq_refl.
 Qed.
-
-Lemma hdef_upd :
-  forall h h' x v, h x <> None -> hdef h h' ->
-  hdef (upd h x v) h'.
-Proof.
-  unfold hdef, upd; ins; desf; firstorder.
-Qed.
-
-Lemma hdef_upds :
-  forall h h' x v v', hdef (upd h x (Some v)) h' ->
-  hdef (upd h x (Some v')) h'.
-Proof.
-  unfold hdef, upd; ins; specialize (H x0); desf; vauto.
-Qed.
-
 
 Theorem rule_write J E E0 E':
   CSL J (Apointsto E E0) (Cwrite E E') (Apointsto E E').
 Proof.
-  unfold CSL; inss; destruct n; inss.
-    by inv ABORT; ins; unfold hplus, upd in *; desf.
-    by unfold upd in *; desf.
-  inv STEP; clear STEP; ins; clarify.
-  eexists (upd (fun _ => None) (edenot E s0) (Some (edenot E' s0))), (fun _ => None).
-  repeat split; eauto using hdefU, hdefU, hdef_upds.
-    by extensionality x; unfold upd, hplus; simpl; desf.
-  by eapply safe_skip.
+rewrite /CSL; split=>//= n s h EQH; elim: n=>//= n IH; do!split=>//.
+- move=>hF ? AB.
+  case: {-2}_ {-2}_ / AB (erefl (Cwrite E E')) (erefl (s, hplus h hF)) =>//.
+  move=>??? NIN; case=>EQ1 _; rewrite EQH; move: NIN=>/[swap]->/=.
+  by rewrite EQ1 /hplus /upd eq_refl.
+- by move=>?; rewrite EQH /upd mem_seq1=>/eqP->; rewrite eq_refl.
+move=>hJ hF c' ss' ST SAT ? D2 ?.
+case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cwrite E E')) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//.
+move=>???? s0 ? EQ0 EQ; case=>EQ1 EQ2 EQ00 EQC ?; rewrite EQ0 in EQ00; case: EQ00=>EQ01 EQ02.
+rewrite EQC /= in SAT; rewrite EQ EQ1 EQ2 EQ02 SAT /=.
+exists (upd (fun _ => None) (edenot E s0) (Some (edenot E' s0))), (fun _ => None); do!split=>//.
+- by rewrite EQH EQ01 /upd /hplus; apply/fext=>?; case: eqP.
+- by apply/hdefU2.
+- by move: D2; rewrite EQH EQ01; apply: hdef_upds.
+- by apply/hdefU.
+by apply/safe_skip.
 Qed.
 
 Theorem rule_alloc J x E:
-  ~ In x (fvE E) ->
+  x \notin fvE E ->
   ~ fvAs J x ->
-  CSL J (Aemp) (Calloc x E) (Apointsto (Evar x) E).
+  CSL J Aemp (Calloc x E) (Apointsto (Evar x) E).
 Proof.
-  unfold CSL; inss; destruct n; inss.
-  by inv ABORT.
-  inv STEP; ins; clarify.
-  eexists (upd (fun _ => None) v (Some (edenot E s0))), (fun _ => None).
-  rewrite ?hplusU in *; repeat split; auto using hdefU.
-    by extensionality y; unfold upd, hplus; simpl; desf.
-  by unfold hdef, upd; ins; desf; vauto.
-  by apply safe_skip; ins; rewrite prop1_E2; unfold upd; desf.
+move=>??; rewrite /CSL; split=>// n s h /= EQH; elim: n=>//= n IH; do!split=>//.
+- move=>hF ? AB.
+  by case: {-2}_ {-2}_ / AB (erefl (Calloc x E)).
+move=>hJ hF c' ss' ST SAT ???.
+case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Calloc x E)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//.
+move=>?????? v EQ0 NIN EQS; case=>EQ1 EQ2 EQ00 EQC ?.
+rewrite EQC /= in SAT; rewrite {}EQ0 in EQ00; case: EQ00=>EQ01 EQ02; rewrite EQS EQ1 EQ2 EQ01 EQ02 EQH /=.
+exists (upd (fun _ => None) v (Some (edenot E s))), (fun _ => None); do!split.
+- by rewrite SAT /upd /hplus; apply/fext=>?; case: eqP.
+- by apply/hdefU2.
+- by move: NIN; rewrite EQ02 EQH SAT !hplusU /hdef /upd => H ?; case: eqP; [move=>->; right|left].
+- by apply/hdefU.
+by apply/safe_skip=>/=; rewrite prop1_E2 // /upd eq_refl.
 Qed.
 
 Theorem rule_free J E E':
-  CSL J (Apointsto E E') (Cdispose E) (Aemp).
+  CSL J (Apointsto E E') (Cdispose E) Aemp.
 Proof.
-  unfold CSL; inss; destruct n; inss.
-    by inv ABORT; ins; unfold hplus, upd in *; desf.
-    by unfold upd in *; desf.
-  inv STEP; clear STEP; ins; clarify.
-  eexists (fun _ => None), (fun _ => None); repeat split; auto using hdefU.
-    by destruct (D2 (edenot E s0));
-       extensionality y; unfold upd, hplus in *; desf.
-  by eapply safe_skip; ins.
+rewrite /CSL; split=>// n s h /= EQH; elim: n=>//=n IH; do!split=>//.
+- move=>hF ? AB.
+  case: {-2}_ {-2}_ / AB (erefl (Cdispose E)) (erefl (s, hplus h hF)) => //.
+  by move=>?? NIN; case=>EQ EQS; move: NIN; rewrite EQ EQS EQH /= /hplus /upd eq_refl.
+- by move=>?; rewrite EQH /upd mem_seq1=>/eqP->; rewrite eq_refl.
+move=>hJ hF c' ss' ST SAT ? D2 ?.
+case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cdispose E)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//.
+move=>????? EQ0 EQS0; case=>EQ1 EQ EQC ?; rewrite EQ0 in EQ; case: EQ=>EQ01 EQ02.
+rewrite EQC /= in SAT; rewrite EQS0 EQ1 EQ01 EQ02 EQH SAT /=.
+exists (fun _ => None), (fun _ => None); do!split; try by apply/hdefU.
+- rewrite EQH /hdef in D2; case: (D2 (edenot E s)); rewrite /upd /hplus =>HD; apply/fext=>?; case: eqP=>//.
+  - by rewrite eq_refl in HD.
+  by move=>->; rewrite HD.
+by apply/safe_skip.
 Qed.
 
 (** *** Simple structural rules (Conseq, Disj, Ex) *)
@@ -963,8 +1019,11 @@ Lemma safe_conseq:
   forall n C s h J Q (OK: safe n C s h J Q) Q' (IMP: Q |= Q'),
   safe n C s h J Q'.
 Proof.
-  induction n; inss.
-  exploit SOK; eauto; ins; desf; repeat eexists; eauto.
+elim=>//= ? IH ?????[A][?][?]SOK ? IMP; do!split=>//; first by move/A/IMP.
+move=>???? ST ????; exploit SOK; first by [exact:ST]; try done.
+case=>h'[hJ'][->][?][?][?][?]S.
+exists h', hJ'; do!split=>//.
+by apply/IH; first by exact: S.
 Qed.
 
 Theorem rule_conseq J P C Q P' Q':
@@ -973,7 +1032,9 @@ Theorem rule_conseq J P C Q P' Q':
   (Q |= Q') ->
   CSL J P' C Q'.
 Proof.
-  unfold CSL; inss; eauto using safe_conseq.
+rewrite /CSL; case=>? IH HP HQ; split=>// ????.
+apply/safe_conseq; last by exact: HQ.
+by apply/IH/HP.
 Qed.
 
 Theorem rule_disj J P1 P2 C Q1 Q2:
@@ -981,7 +1042,8 @@ Theorem rule_disj J P1 P2 C Q1 Q2:
   CSL J P2 C Q2 ->
   CSL J (Adisj P1 P2) C (Adisj Q1 Q2).
 Proof.
-  unfold CSL; inss; eapply safe_conseq; eauto; vauto.
+rewrite /CSL; case=>? H1 [_]H2; split=>//= ???.
+by case=>H; apply/safe_conseq=>/=; [apply/H1|left|apply/H2|right].
 Qed.
 
 Theorem rule_ex J P C Q:
