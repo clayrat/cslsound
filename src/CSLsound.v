@@ -640,7 +640,7 @@ elim=>//= ? IH C s h ? r ?? [H1][H2][H3]H4 ? DJ; do!split=>//.
   move=>??? c'' ? R; case=>EQ1 EQ2 EQ3 EQ4 EQ5 ?.
   rewrite EQ1 EQ2 EQ3 EQ5 hplusA /= in R *. rewrite EQ4 /= EQ1 in SAT.
   move: (prop2 R)=>/= [?][SU2][?]B.
-  case/orP: (orbN (r \in locked c''))=>RIN.
+  case/boolP: (r \in locked c'')=>RIN.
   - rewrite -(hplusA hR) in R.
     exploit H4; first by [exact:R].
     - rewrite (sat_envs_expand RIN) //=.
@@ -696,7 +696,7 @@ case: {-2}_ {-2}_ {-1}_ {-2}_ /R (erefl (Cresource r C)) (erefl (s, hplus h (hpl
   exploit (IH _ _ _ _ _ _ _ X4).
   - by apply/red_wf_cmd; first by exact:R.
   - by move=>? Hx ?; apply/DJ; [exact:Hx|apply/SU2].
-  move=>[Y Y0]; case/orP: (orbN (r \in locked c''))=>RIN.
+  move=>[Y Y0]; case/boolP: (r \in locked c'')=>RIN.
   - rewrite envs_upd_irr in X3; last by right.
     rewrite envs_removeAll2 //.
     by exists h', hJ'; do!split=>//; apply/Y0.
