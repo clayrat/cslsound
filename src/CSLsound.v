@@ -37,7 +37,7 @@ Fixpoint Aistar ps :=
 
 Fixpoint sat ss p :=
   match p with
-    | Aemp            => ss.2 = (fun x => None)
+    | Aemp            => ss.2 = hemp
     | Apure b         => bdenot b ss.1
     | Aconj p q       => sat ss p /\ sat ss q
     | Adisj p q       => sat ss p \/ sat ss q
@@ -45,8 +45,8 @@ Fixpoint sat ss p :=
                           /\ hdef h1 h2 /\ hplus h1 h2 = ss.2
     | Awand p q       => forall h (SAT: sat (ss.1, h) p) (HD: hdef ss.2 h),
                           sat (ss.1, hplus ss.2 h) q
-    | Apointsto e1 e2 => ss.2 = upd (fun x => None) (edenot e1 ss.1)
-                                                (Some (edenot e2 ss.1))
+    | Apointsto e1 e2 => ss.2 = singl (edenot e1 ss.1)
+                                      (Some (edenot e2 ss.1))
     | Anot p          => not (sat ss p)
     | Aex pp          => exists v, sat ss (pp v)
   end.
@@ -69,7 +69,7 @@ move=>Hr; case: eqP=>/=; first by move: Ha=>/[swap]->; rewrite Hr.
 move=>Hn; split.
 - move=>[h1][h2][?][H1][H2]<-.
   move: ((H h2 Hr Hu).1 H1)=>[h3][h4][?][?][?]HH4.
-  move: H1 H2; rewrite -{}HH4=>_ H2. move/hdef_hplus2: H2=>[H21 H22].
+  move: H1 H2; rewrite -{}HH4=> _ /hdef_hplus2 [??].
   exists h3, (hplus h1 h4); do!split=>//.
   exists h1, h4; do!split=>//.
   - by apply/hdef_hplus2; split; [apply/hdefC|].
@@ -219,12 +219,12 @@ Fixpoint safe (n : nat) (c: cmd) (s: stack) (h: heap) (gamma : rname -> option a
              (D2: hdef h hF)
              (D3: hdef hJ hF),
              exists h' hJ',
-                     snd ss' = hplus h' (hplus hJ' hF)
+                     ss'.2 = hplus h' (hplus hJ' hF)
                   /\ hdef h' hJ'
                   /\ hdef h' hF
                   /\ hdef hJ' hF
-                  /\ sat (fst ss', hJ') (envs gamma (locked c) (locked c'))
-                  /\ safe n c' (fst ss') h' gamma q)
+                  /\ sat (ss'.1, hJ') (envs gamma (locked c) (locked c'))
+                  /\ safe n c' ss'.1 h' gamma q)
   end.
 
 (** Now, the meaning of triples (cf. Definitions 2 and 5 in paper) *)
@@ -240,8 +240,8 @@ Definition CSL gamma p c q :=
 Fixpoint fvA p :=
   match p with
     | Aemp                  => fun v => False
-    | Apure B               => fun v => v \in (fvB B)
-    | Apointsto e1 e2       => fun v => v \in (fvE e1 ++ fvE e2)
+    | Apure B               => fun v => v \in fvB B
+    | Apointsto e1 e2       => fun v => v \in fvE e1 ++ fvE e2
     | Anot P                => fvA P
     | Astar P Q | Awand P Q
     | Aconj P Q | Adisj P Q => fun v => fvA P v \/ fvA Q v
@@ -494,8 +494,6 @@ Qed.
 (* -------------------------------------------------------------------------- *)
 
 (** We now show the soundness of each proof rule of CSL separately. *)
-
-Section SoundnessRules.
 
 Definition disjoint A (X Y: A -> Prop) := forall x, X x -> Y x -> False.
 
@@ -799,7 +797,7 @@ move=>[h1][h2][?][?][?]HH; rewrite -HH in D1 D2 *.
 exists h1, h2; rewrite SAT; do!split=>//.
 - by rewrite hplusU hplusA.
 - 1,2: by move: D2; rewrite hdef_hplus; case.
-- by exists h2, (fun=>None); do!split=>//; [rewrite -EQ2|apply: hdefU2|apply: hplusU2].
+- by exists h2, hemp; do!split=>//; [rewrite -EQ2|apply: hdefU2|apply: hplusU2].
 by apply/safe_skip.
 Qed.
 
@@ -815,7 +813,7 @@ move=>hJ hF c' ss' ST SAT D1 D2 D3.
 case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cwith r B C)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//=.
 move=>???? Bd; case=>EQ1 EQ2 EQ3 EQSS EQC ?; move: SAT. rewrite EQC EQ1 EQ3 EQSS /= (user_cmd_locked U) /=.
 case=>h1[?][?][->][?] EQJ; move: D1 D3; rewrite -EQJ hdef_hplus hdef_hplus2; case=>??[??].
-exists (hplus h h1), (fun _ => None); rewrite !hplusA; do!split=>//.
+exists (hplus h h1), hemp; rewrite !hplusA; do!split=>//.
 - 1,2: by rewrite hdef_hplus.
 apply/safe_inwith=>/=.
 - apply/SA=>/=; rewrite EQ2 EQSS /= in Bd; split=>//.
@@ -927,7 +925,7 @@ move=>hJ hF c' ss' ST SAT ??.
 case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cassign x E)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//.
 move=>?????? EQ01 EQ02; case=>EQ1 EQ2 EQ EQC EQSS ?.
 rewrite EQC /= in SAT; rewrite EQ01 in EQ; case: EQ=>EQS EQH; rewrite EQ02 /= EQH SAT.
-exists h, (fun=>None); do!split=>//.
+exists h, hemp; do!split=>//.
 - by apply: hdefU2.
 - by apply: hdefU.
 by rewrite EQS EQ1 EQ2; apply safe_skip; rewrite -subA_assign.
@@ -942,15 +940,15 @@ Proof.
 move=>???; rewrite /CSL; split=>//= n s h EQH; elim: n=>// n IH /=; do!split=>//.
 - move=>hF ? AB.
   case: {-2}_ {-2}_ / AB (erefl (Cread x E)) (erefl (s, hplus h hF)) =>//.
-  by move=>??? NIN; case=>_ EQ2; rewrite EQH; move: NIN=>/[swap]-> /=; rewrite /hplus /upd EQ2 eq_refl.
-- by move=>?; rewrite EQH /upd mem_seq1 =>/eqP ->; rewrite eq_refl.
+  by move=>??? NIN; case=>_ EQ2; rewrite EQH; move: NIN=>/[swap]-> /=; rewrite /hplus /singl EQ2 eq_refl.
+- by move=>?; rewrite EQH /singl mem_seq1 =>/eqP ->; rewrite eq_refl.
 move=>hJ hF c' ss' ST SAT ???.
 case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cread x E)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//.
 move=>??????? EQ01 RD EQ02; case=>EQ1 EQ2 EQ EQC EQSS.
 rewrite EQ01 in EQ; case: EQ=>EQS0 EQH0; rewrite EQ02 EQH0 /=; rewrite EQC /= in SAT.
 exists h, hJ; do!split=>//.
 apply/safe_skip; rewrite EQH EQS0 EQ1 /= !prop1_E2 //; split=>//.
-by rewrite EQH0 SAT EQ2 EQS0 /hplus EQH /upd eq_refl in RD; case: RD=><-; rewrite /upd !eq_refl.
+by rewrite EQH0 SAT EQ2 EQS0 /hplus EQH /singl eq_refl in RD; case: RD=><-; rewrite /upd !eq_refl.
 Qed.
 
 Theorem rule_write J E E0 E':
@@ -960,14 +958,14 @@ rewrite /CSL; split=>//= n s h EQH; elim: n=>//= n IH; do!split=>//.
 - move=>hF ? AB.
   case: {-2}_ {-2}_ / AB (erefl (Cwrite E E')) (erefl (s, hplus h hF)) =>//.
   move=>??? NIN; case=>EQ1 _; rewrite EQH; move: NIN=>/[swap]->/=.
-  by rewrite EQ1 /hplus /upd eq_refl.
-- by move=>?; rewrite EQH /upd mem_seq1=>/eqP->; rewrite eq_refl.
+  by rewrite EQ1 /hplus /singl eq_refl.
+- by move=>?; rewrite EQH /singl mem_seq1=>/eqP->; rewrite eq_refl.
 move=>hJ hF c' ss' ST SAT ? D2 ?.
 case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cwrite E E')) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//.
 move=>???? s0 ? EQ0 EQ; case=>EQ1 EQ2 EQ00 EQC ?; rewrite EQ0 in EQ00; case: EQ00=>EQ01 EQ02.
 rewrite EQC /= in SAT; rewrite EQ EQ1 EQ2 EQ02 SAT /=.
-exists (upd (fun _ => None) (edenot E s0) (Some (edenot E' s0))), (fun _ => None); do!split=>//.
-- by rewrite EQH EQ01 /upd /hplus; apply/fext=>?; case: eqP.
+exists (singl (edenot E s0) (Some (edenot E' s0))), hemp; do!split=>//.
+- by rewrite EQH EQ01 /singl /upd /hplus; apply/fext=>?; case: eqP.
 - by apply/hdefU2.
 - by move: D2; rewrite EQH EQ01; apply: hdef_upds.
 - by apply/hdefU.
@@ -986,10 +984,10 @@ move=>hJ hF c' ss' ST SAT ???.
 case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Calloc x E)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//.
 move=>?????? v EQ0 NIN EQS; case=>EQ1 EQ2 EQ00 EQC ?.
 rewrite EQC /= in SAT; rewrite {}EQ0 in EQ00; case: EQ00=>EQ01 EQ02; rewrite EQS EQ1 EQ2 EQ01 EQ02 EQH /=.
-exists (upd (fun _ => None) v (Some (edenot E s))), (fun _ => None); do!split.
-- by rewrite SAT /upd /hplus; apply/fext=>?; case: eqP.
+exists (singl v (Some (edenot E s))), hemp; do!split.
+- by rewrite SAT /upd /singl /hplus; apply/fext=>?; case: eqP.
 - by apply/hdefU2.
-- by move: NIN; rewrite EQ02 EQH SAT !hplusU /hdef /upd => H ?; case: eqP; [move=>->; right|left].
+- by move: NIN; rewrite EQ02 EQH SAT !hplusU /hdef /singl => H ?; case: eqP; [move=>->; right|left].
 - by apply/hdefU.
 by apply/safe_skip=>/=; rewrite prop1_E2 // /upd eq_refl.
 Qed.
@@ -999,15 +997,15 @@ Theorem rule_free J E E':
 Proof.
 rewrite /CSL; split=>// n s h /= EQH; elim: n=>//=n IH; do!split=>//.
 - move=>hF ? AB.
-  case: {-2}_ {-2}_ / AB (erefl (Cdispose E)) (erefl (s, hplus h hF)) => //.
-  by move=>?? NIN; case=>EQ EQS; move: NIN; rewrite EQ EQS EQH /= /hplus /upd eq_refl.
-- by move=>?; rewrite EQH /upd mem_seq1=>/eqP->; rewrite eq_refl.
+  case: {-2}_ {-2}_ / AB (erefl (Cdispose E)) (erefl (s, hplus h hF))=>//.
+  by move=>?? NIN; case=>EQ EQS; move: NIN; rewrite EQ EQS EQH /= /hplus /singl eq_refl.
+- by move=>?; rewrite EQH /singl mem_seq1=>/eqP->; rewrite eq_refl.
 move=>hJ hF c' ss' ST SAT ? D2 ?.
 case: {-2}_ {-2}_ {-1}_ {-2}_ /ST (erefl (Cdispose E)) (erefl (s, hplus h (hplus hJ hF))) (erefl c') (erefl ss')=>//.
 move=>????? EQ0 EQS0; case=>EQ1 EQ EQC ?; rewrite EQ0 in EQ; case: EQ=>EQ01 EQ02.
 rewrite EQC /= in SAT; rewrite EQS0 EQ1 EQ01 EQ02 EQH SAT /=.
-exists (fun _ => None), (fun _ => None); do!split; try by apply/hdefU.
-- rewrite EQH /hdef in D2; case: (D2 (edenot E s)); rewrite /upd /hplus =>HD; apply/fext=>?; case: eqP=>//.
+exists hemp, hemp; do!split; try by apply/hdefU.
+- rewrite EQH /hdef in D2; case: (D2 (edenot E s)); rewrite /upd /singl /hplus =>HD; apply/fext=>?; case: eqP=>//.
   - by rewrite eq_refl in HD.
   by move=>->; rewrite HD.
 by apply/safe_skip.

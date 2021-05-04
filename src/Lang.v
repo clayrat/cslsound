@@ -1,5 +1,5 @@
 From Coq Require Import ssreflect ssrbool ssrfun.
-From mathcomp Require Import ssrnat ssrint ssralg eqtype seq path.
+From mathcomp Require Import ssrnat ssrint ssralg eqtype seq.
 From cslsound Require Import Basic.
 
 Set Implicit Arguments.
@@ -108,7 +108,7 @@ Fixpoint locks c :=
     | Cpar c1 c2    => locks c1 ++ locks c2
     | Cif _ c1 c2   => locks c1 ++ locks c2
     | Cwhile _ c    => locks c
-    | Cresource r c => filter (predC1 r) (locks c)
+    | Cresource r c => remove r (locks c)
     | Cwith r _ c   => r :: locks c
     | Cinwith r c   => r :: locks c
   end.
@@ -118,18 +118,18 @@ Fixpoint locks c :=
 
 (** Denotational semantics for arithmetic and boolean expressions. *)
 
-Fixpoint edenot e s :=
+Fixpoint edenot e (s : stack) :=
   match e with
     | Evar v      => s v
     | Enum n      => n
     | Eplus e1 e2 => edenot e1 s + edenot e2 s
   end.
 
-Fixpoint bdenot b s : bool :=
+Fixpoint bdenot b s :=
   match b with
-    | Beq e1 e2  => if edenot e1 s == edenot e2 s then true else false
+    | Beq e1 e2  => edenot e1 s == edenot e2 s
     | Band b1 b2 => bdenot b1 s && bdenot b2 s
-    | Bnot b     => negb (bdenot b s)
+    | Bnot b     => ~~ bdenot b s
   end.
 
 (** ** Semantics of commands *)
@@ -145,10 +145,10 @@ Inductive red: cmd -> state -> cmd -> state -> Prop :=
   (R: red c1 ss c1' ss'),
   red (Cseq c1 c2) ss (Cseq c1' c2) ss'
 | red_If1: forall b c1 c2 ss
-  (B: bdenot b (fst ss) = true),
+  (B: bdenot b ss.1),
   red (Cif b c1 c2) ss c1 ss
 | red_If2: forall b c1 c2 ss
-  (B: bdenot b (fst ss) = false),
+  (B: ~~ bdenot b ss.1),
   red (Cif b c1 c2) ss c2 ss
 | red_Par1: forall c1 c2 ss c1' ss'
   (R: red c1 ss c1' ss')
@@ -166,7 +166,7 @@ Inductive red: cmd -> state -> cmd -> state -> Prop :=
   red (Cresource r c) ss (Cresource r c') ss'
 | red_Res2: forall r ss, red (Cresource r Cskip) ss Cskip ss
 | red_With1: forall r b c ss
-  (B: bdenot b (fst ss)),
+  (B: bdenot b ss.1),
   red (Cwith r b c) ss (Cinwith r c) ss
 | red_With2:  forall r c ss c' ss'
   (R: red c ss c' ss')
@@ -255,13 +255,13 @@ Inductive aborts : cmd -> state -> Prop :=
 | aborts_Res: forall r c ss (A: aborts c ss), aborts (Cresource r c) ss
 | aborts_Atom: forall r c ss (A: aborts c ss), aborts (Cinwith r c) ss
 | aborts_Read: forall x e ss
-    (NIN: snd ss (edenot e ss.1) = None),
+    (NIN: ss.2 (edenot e ss.1) = None),
     aborts (Cread x e) ss
 | aborts_Write: forall e1 e2 ss
-    (NIN: snd ss (edenot e1 ss.1) = None),
+    (NIN: ss.2 (edenot e1 ss.1) = None),
     aborts (Cwrite e1 e2) ss
 | aborts_Free: forall e ss
-    (NIN: snd ss (edenot e ss.1) = None),
+    (NIN: ss.2 (edenot e ss.1) = None),
     aborts (Cdispose e) ss.
 
 (** ** Well-formed commands *)
