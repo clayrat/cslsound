@@ -62,7 +62,7 @@ Lemma sat_istar_map_expand :
       /\ hdef h1 h2 /\ hplus h1 h2 = ss.2.
 Proof.
 move=>? l [? h] ?.
-elim: l h=>//= a l H ?; rewrite in_cons=>/orP H1 /andP [Ha Hu]; case: H1.
+elim: l h=>//= a l H ?; rewrite inE=>/orP H1 /andP [Ha Hu]; case: H1.
 - move/eqP=>->; rewrite /remove eq_refl=>/=; suff: all (predC1 a) l by move/all_filterP=>->.
   by apply/allP=>? /=; case: eqP Ha=>//->/[swap]->.
 move=>Hr; case: eqP=>/=; first by move: Ha=>/[swap]->; rewrite Hr.
@@ -134,7 +134,7 @@ Qed.
 
 Definition assn_lift po := match po with None => Aemp | Some p => p end.
 
-Definition envs G (l l' : list rname) :=
+Definition envs G (l l' : seq rname) :=
   (Aistar (map (fun x => assn_lift (G x)) (lminus l l'))).
 
 Lemma sat_envs_expand:
@@ -179,8 +179,8 @@ Qed.
 Lemma envs_cons2_irr:
   forall r l (NIN: r \notin l) J l', envs J (r :: l) (r :: l') = envs J l l'.
 Proof.
-rewrite /envs=>r ? H ?? /=; do 2!f_equal; rewrite in_cons eq_refl /=.
-rewrite /lminus; apply/eq_in_filter=>x Hx /=; rewrite in_cons negb_or.
+rewrite /envs=>r ? H ?? /=; do 2!f_equal; rewrite inE eq_refl /=.
+rewrite /lminus; apply/eq_in_filter=>x Hx /=; rewrite inE negb_or.
 by suff: (x!=r); [move=>->| move: Hx H; apply/inNotin].
 Qed.
 
@@ -239,7 +239,7 @@ Definition CSL gamma p c q :=
 
 Fixpoint fvA p :=
   match p with
-    | Aemp                  => fun v => False
+    | Aemp                  => fun => False
     | Apure B               => fun v => v \in fvB B
     | Apointsto e1 e2       => fun v => v \in fvE e1 ++ fvE e2
     | Anot P                => fvA P
@@ -497,10 +497,10 @@ Qed.
 
 Definition disjoint A (X Y: A -> Prop) := forall x, X x -> Y x -> False.
 
-Definition pr {A : eqType} (l: list A) (x: A) : Prop := x \in l.
+Definition pr {A : eqType} (l: seq A) (x: A) : Prop := x \in l.
 
 Lemma disjoint_conv :
-  forall {A : eqType} (l1 l2 : list A), disjoint (pr l1) (pr l2) -> Basic.disjoint l1 l2.
+  forall {A : eqType} (l1 l2 : seq A), disjoint (pr l1) (pr l2) -> Basic.disjoint l1 l2.
 Proof.
 by move=>??? H; apply/hasP; case=>x ??; apply/(H x).
 Qed.
